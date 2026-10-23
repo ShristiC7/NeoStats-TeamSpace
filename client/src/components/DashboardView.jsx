@@ -163,6 +163,20 @@ export default function DashboardView({
                     <div className="project-widget-desc">
                       {proj.description || 'The goal of this project was to redesign an existing application to improve usability, visual clarity, and engagement.'}
                     </div>
+                    {(proj.liveDemoUrl || proj.githubUrl) && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }} onClick={e => e.stopPropagation()}>
+                        {proj.liveDemoUrl && (
+                          <a href={proj.liveDemoUrl} target="_blank" rel="noopener noreferrer" className="project-link-badge demo" style={{ fontSize: 10, padding: '2px 7px' }}>
+                            <Globe size={11} /> Demo
+                          </a>
+                        )}
+                        {proj.githubUrl && (
+                          <a href={proj.githubUrl} target="_blank" rel="noopener noreferrer" className="project-link-badge github" style={{ fontSize: 10, padding: '2px 7px' }}>
+                            <Code2 size={11} /> GitHub
+                          </a>
+                        )}
+                      </div>
+                    )}
 
                     <div className="project-widget-deadline">
                       <Calendar size={13} /> Deadline: {fmtDate(proj.createdAt)}

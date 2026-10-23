@@ -1,38 +1,49 @@
 ﻿/**
  * TeamSpace Email Service
  * Uses Nodemailer with configurable SMTP.
- * All email delivery is backend-only; no credentials are exposed to the client.
- *
- * Required environment variables:
- *   SMTP_HOST      - SMTP server hostname (e.g. smtp.gmail.com)
- *   SMTP_PORT      - SMTP port (default: 587)
- *   SMTP_SECURE    - 'true' for port 465 (SSL), 'false' for STARTTLS
- *   SMTP_USER      - SMTP username / email address
- *   SMTP_PASS      - SMTP password / app password
- *   EMAIL_FROM     - Sender address (e.g. "TeamSpace <no-reply@teamspace.app>")
- *   APP_BASE_URL   - Base URL for task links (e.g. http://localhost:5173)
+ * Fallback to Ethereal Email for instant out-of-the-box local testing with real preview URLs.
  */
 
 import nodemailer from 'nodemailer';
 
-// --- Transporter ---
+let transporter = null;
+let etherealAccount = null;
+const recentEmails = [];
 
-function createTransporter() {
+async function getTransporter() {
   if (process.env.NODE_ENV === 'test') return null;
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
-    console.warn('[emailService] SMTP not configured. Emails will be logged but not sent.');
+  if (transporter) return transporter;
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+    try {
+      transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT) || 587,
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      });
+      return transporter;
+    } catch (err) {
+      console.error('[emailService] Configured SMTP failed:', err.message);
+    }
+  }
+
+  // Automatic Ethereal account for development/hackathon demo
+  try {
+    etherealAccount = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: etherealAccount.smtp.host,
+      port: etherealAccount.smtp.port,
+      secure: etherealAccount.smtp.secure,
+      auth: { user: etherealAccount.user, pass: etherealAccount.pass }
+    });
+    console.info('[emailService] Ethereal test inbox initialized for local delivery:', etherealAccount.user);
+    return transporter;
+  } catch (err) {
+    console.warn('[emailService] Ethereal init skipped:', err.message);
     return null;
   }
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
 }
-
-let transporter = null;
-try { transporter = createTransporter(); } catch (e) { console.error('[emailService] Transport init failed:', e.message); }
 
 const FROM = process.env.EMAIL_FROM || 'TeamSpace <no-reply@teamspace.app>';
 const BASE_URL = process.env.APP_BASE_URL || 'http://localhost:5173';
@@ -41,22 +52,39 @@ function taskLink(taskId) { return `${BASE_URL}/tasks/${taskId}`; }
 function fmtDate(d) { if (!d) return 'Not set'; return new Date(d).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }); }
 function fmtDateTime(d) { if (!d) return 'Unknown'; return new Date(d).toLocaleString('en-US', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' }); }
 
-async function send({ to, subject, text, html }) {
+export async function send({ to, subject, text, html }) {
   if (!to || typeof to !== 'string' || !to.includes('@')) {
     console.warn('[emailService] Skipped - invalid recipient:', to);
     return;
   }
-  if (!transporter) {
-    console.info('[emailService] SMTP not configured - email NOT sent.\n', { to, subject, text: text?.slice(0, 200) });
-    return;
-  }
+
+  let previewUrl = null;
   try {
-    const info = await transporter.sendMail({ from: FROM, to, subject, text, html });
-    console.info('[emailService] Email sent to', to, '-', info.messageId);
+    const mailer = await getTransporter();
+    if (mailer) {
+      const info = await mailer.sendMail({ from: FROM, to, subject, text, html });
+      previewUrl = nodemailer.getTestMessageUrl(info);
+      console.info(`[emailService] Email sent to ${to} (${info.messageId}) ${previewUrl ? 'Preview: ' + previewUrl : ''}`);
+    } else {
+      console.info(`[emailService] Email logged to ${to}: ${subject}`);
+    }
   } catch (err) {
     console.error('[emailService] Failed to send email to', to, '-', err.message);
-    // Never rethrow - email failure must not undo persisted task changes
   }
+
+  recentEmails.unshift({
+    id: Date.now() + Math.random().toString(36).slice(2, 6),
+    to,
+    subject,
+    text,
+    previewUrl,
+    timestamp: new Date().toISOString()
+  });
+  if (recentEmails.length > 50) recentEmails.pop();
+}
+
+export function getRecentEmails() {
+  return recentEmails;
 }
 
 export async function sendTaskAssignedEmail({ task, assignee, assigner, projectName }) {
@@ -71,9 +99,41 @@ export async function sendTaskAssignedEmail({ task, assignee, assigner, projectN
     task.description?.trim() ? `Description: ${task.description.trim()}` : ''
   ].filter(Boolean).join('\n');
 
-  const text = `Hello ${assignee.name},\n\nA task has been assigned to you in TeamSpace.\n\n${rows}\n\nOpen task: ${link}\n\nThank you,\nTeamSpace`;
+  const text = `Hello ${assignee.name},\n\nA task has been assigned to you in TeamSpace.\n\n${rows}\n\nPlease open TeamSpace to view the task and its details: ${link}\n\nThank you,\nTeamSpace Team`;
 
-  await send({ to: assignee.email, subject: `New Task Assigned: ${task.title}`, text });
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%); padding: 24px; color: #ffffff;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.3px;">TeamSpace</h1>
+        <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.9;">Collaborative Project Workspace</p>
+      </div>
+      <div style="padding: 24px;">
+        <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">New Task Assigned</h2>
+        <p style="font-size: 14px; color: #475569; line-height: 1.5;">Hello <strong>${assignee.name}</strong>,</p>
+        <p style="font-size: 14px; color: #475569; line-height: 1.5;">A task has been assigned to you in TeamSpace.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600; width: 120px;">Task Title:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a; font-weight: 700;">${task.title}</td></tr>
+          <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Project:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a;">${projectName}</td></tr>
+          <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Assigned By:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a;">${assigner?.name || 'A team member'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Priority:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a; text-transform: uppercase; font-weight: 600;">${task.priority || 'medium'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Due Date:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a;">${fmtDate(task.dueDate)}</td></tr>
+          ${task.description ? `<tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Description:</td><td style="padding: 10px 14px; font-size: 13px; color: #334155; line-height: 1.5;">${task.description}</td></tr>` : ''}
+        </table>
+
+        <div style="margin: 24px 0 16px; text-align: center;">
+          <a href="${link}" style="background: #6d28d9; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">
+            Open Task in TeamSpace &rarr;
+          </a>
+        </div>
+      </div>
+      <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
+        Sent automatically by TeamSpace.
+      </div>
+    </div>
+  `;
+
+  await send({ to: assignee.email, subject: `New Task Assigned: ${task.title}`, text, html });
 }
 
 export async function sendTaskCompletedEmail({ task, completedBy, projectName, recipients }) {
@@ -83,8 +143,39 @@ export async function sendTaskCompletedEmail({ task, completedBy, projectName, r
 
   for (const recipient of recipients) {
     if (!recipient?.email) { console.warn('[emailService] sendTaskCompletedEmail: recipient has no email:', recipient?.name); continue; }
-    const text = `Hello ${recipient.name},\n\nA task has been marked as completed in TeamSpace.\n\nTask: ${task.title}\nProject: ${projectName}\nCompleted by: ${completedBy?.name || 'A team member'}\nCompleted at: ${completedAt}\n\nView task: ${link}\n\nThank you,\nTeamSpace`;
-    await send({ to: recipient.email, subject: `Task Completed: ${task.title}`, text });
+    const text = `Hello ${recipient.name},\n\nA task has been marked as completed in TeamSpace.\n\nTask: ${task.title}\nProject: ${projectName}\nCompleted by: ${completedBy?.name || 'A team member'}\nCompleted at: ${completedAt}\n\nView task: ${link}\n\nThank you,\nTeamSpace Team`;
+    
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 24px; color: #ffffff;">
+          <h1 style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.3px;">TeamSpace</h1>
+          <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.9;">Collaborative Project Workspace</p>
+        </div>
+        <div style="padding: 24px;">
+          <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Task Marked as Completed</h2>
+          <p style="font-size: 14px; color: #475569; line-height: 1.5;">Hello <strong>${recipient.name}</strong>,</p>
+          <p style="font-size: 14px; color: #475569; line-height: 1.5;">The following task has been successfully completed in project <strong>${projectName}</strong>:</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+            <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600; width: 120px;">Task:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a; font-weight: 700;">${task.title}</td></tr>
+            <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Project:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a;">${projectName}</td></tr>
+            <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Completed By:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a;">${completedBy?.name || 'A team member'}</td></tr>
+            <tr><td style="padding: 10px 14px; font-size: 13px; color: #64748b; font-weight: 600;">Completed At:</td><td style="padding: 10px 14px; font-size: 14px; color: #0f172a;">${completedAt}</td></tr>
+          </table>
+
+          <div style="margin: 24px 0 16px; text-align: center;">
+            <a href="${link}" style="background: #059669; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">
+              View Task in TeamSpace &rarr;
+            </a>
+          </div>
+        </div>
+        <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
+          Sent automatically by TeamSpace.
+        </div>
+      </div>
+    `;
+
+    await send({ to: recipient.email, subject: `Task Completed: ${task.title}`, text, html });
   }
 }
 

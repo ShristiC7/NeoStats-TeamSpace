@@ -16,6 +16,11 @@ import ProjectDetailView from './components/ProjectDetailView.jsx';
 import UsersView from './components/UsersView.jsx';
 import ProfileView from './components/ProfileView.jsx';
 import TaskDetailModal from './components/TaskDetailModal.jsx';
+import KanbanDeskView from './components/KanbanDeskView.jsx';
+import MessagesView from './components/MessagesView.jsx';
+import NotificationsView from './components/NotificationsView.jsx';
+import CalendarView from './components/CalendarView.jsx';
+import { Globe, Code2 } from 'lucide-react';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('teamspace_token') || '');
@@ -34,7 +39,7 @@ export default function App() {
 
   // Create Project Modal State
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
-  const [newProjectForm, setNewProjectForm] = useState({ name: '', description: '', managerId: '' });
+  const [newProjectForm, setNewProjectForm] = useState({ name: '', description: '', managerId: '', liveDemoUrl: '', githubUrl: '' });
   const [submittingProject, setSubmittingProject] = useState(false);
 
   // Task Detail Modal State
@@ -116,7 +121,7 @@ export default function App() {
       localStorage.setItem('teamspace_token', res.token);
       setToken(res.token);
       setUser(res.user);
-      setNotice(`Welcome back to Zendo, ${res.user.name}!`);
+      setNotice(`Welcome back to TeamSpace, ${res.user.name}!`);
     } catch (err) {
       setError(err.message || 'Login failed.');
     }
@@ -132,7 +137,7 @@ export default function App() {
       localStorage.setItem('teamspace_token', res.token);
       setToken(res.token);
       setUser(res.user);
-      setNotice(`Account created! Welcome to Zendo, ${res.user.name} (${res.user.role.replace('_', ' ')}).`);
+      setNotice(`Account created! Welcome to TeamSpace, ${res.user.name} (${res.user.role.replace('_', ' ')}).`);
     } catch (err) {
       setError(err.message || 'Registration failed.');
     }
@@ -424,12 +429,7 @@ export default function App() {
           page={selectedProjectId ? 'Projects' : page}
           setPage={(newPage) => {
             setSelectedProjectId(null);
-            if (newPage === 'Kanban Desk') {
-              if (selectedProject) setSelectedProjectId(selectedProject._id);
-              else setPage('Projects');
-            } else {
-              setPage(newPage);
-            }
+            setPage(newPage);
           }}
           user={user}
           projectsCount={projects.length}
@@ -511,6 +511,21 @@ export default function App() {
                 assignableUsers={assignableUsers}
               />
             </div>
+          ) : page === 'Kanban Desk' ? (
+            <KanbanDeskView
+              user={user}
+              projects={projects}
+              tasks={tasks}
+              onOpenTask={handleOpenTask}
+              onChangeStatus={handleChangeStatus}
+              onOpenProject={(pid) => setSelectedProjectId(pid)}
+            />
+          ) : page === 'Message' ? (
+            <MessagesView user={user} />
+          ) : page === 'Calendar' ? (
+            <CalendarView user={user} tasks={tasks} />
+          ) : page === 'Notifications' ? (
+            <NotificationsView user={user} />
           ) : page === 'Users' ? (
             <UsersView
               users={users}
@@ -597,6 +612,30 @@ export default function App() {
                         </option>
                       ))}
                   </select>
+                </label>
+
+                <label>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Globe size={13} color="#2563eb" /> Live Demo URL (Optional)
+                  </span>
+                  <input
+                    type="url"
+                    placeholder="https://example.com/demo"
+                    value={newProjectForm.liveDemoUrl}
+                    onChange={e => setNewProjectForm({ ...newProjectForm, liveDemoUrl: e.target.value })}
+                  />
+                </label>
+
+                <label>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Code2 size={13} color="#0f172a" /> GitHub Repository URL (Optional)
+                  </span>
+                  <input
+                    type="url"
+                    placeholder="https://github.com/organization/repository"
+                    value={newProjectForm.githubUrl}
+                    onChange={e => setNewProjectForm({ ...newProjectForm, githubUrl: e.target.value })}
+                  />
                 </label>
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>

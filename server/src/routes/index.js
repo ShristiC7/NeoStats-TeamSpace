@@ -19,6 +19,7 @@ import { login, register, googleAuth, me } from '../controllers/auth.js';
 import * as users from '../controllers/users.js';
 import * as projects from '../controllers/projects.js';
 import * as tasks from '../controllers/tasks.js';
+import { getRecentEmails } from '../services/emailService.js';
 
 const r = Router();
 
@@ -67,5 +68,10 @@ r.delete('/tasks/:id', requireAuth, tasks.deleteTask);
 r.get('/tasks/:id/comments', requireAuth, tasks.listComments);
 r.post('/tasks/:id/comments', requireAuth, validate(createCommentSchema), tasks.createComment);
 r.delete('/comments/:commentId', requireAuth, tasks.deleteComment);
+
+// Recent Dispatched Emails Log (For Verification & Demo)
+r.get('/system/recent-emails', requireAuth, (req, res) => {
+  res.json({ ok: true, count: getRecentEmails().length, data: getRecentEmails() });
+});
 
 export default r;
