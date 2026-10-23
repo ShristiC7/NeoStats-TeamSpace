@@ -1,5 +1,8 @@
 ﻿import React, { useState } from 'react';
 import {
+  Mail,
+  Globe,
+  Code2,
   LayoutGrid,
   Clock3,
   CheckCircle2,
@@ -27,7 +30,9 @@ export default function DashboardView({
   onOpenNewProjectModal,
   assignableUsers = [],
   onOpenProfile,
-  onOpenNotifications
+  onOpenNotifications,
+  onOpenAssignTask,
+  onOpenRecentEmails
 }) {
   const [taskTab, setTaskTab] = useState('today'); // 'today' | 'tomorrow' | 'upcoming'
   const [scheduleTab, setScheduleTab] = useState('meetings'); // 'meetings' | 'task'
@@ -68,8 +73,23 @@ export default function DashboardView({
       <div className="zendo-top-header">
         <h1>Overview</h1>
         <div className="zendo-top-actions">
+          <button
+            className="btn primary"
+            onClick={() => onOpenAssignTask && onOpenAssignTask()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#6d28d9', padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13 }}
+          >
+            <Plus size={16} /> Assign Task
+          </button>
           <button className="btn-new-project" onClick={onOpenNewProjectModal}>
             <Plus size={16} /> New Project
+          </button>
+          <button
+            className="btn secondary"
+            onClick={() => onOpenRecentEmails && onOpenRecentEmails()}
+            title="Inspect Automated Email Dispatch Logs"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '7px 12px' }}
+          >
+            <Mail size={14} color="#059669" /> Email Logs
           </button>
           <button className="icon-circle-btn" title="Notifications" onClick={onOpenNotifications}>
             <Bell size={18} />

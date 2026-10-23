@@ -1600,3 +1600,240 @@ input:focus, select:focus, textarea:focus {
   border-color: #6d28d9 !important;
   box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.12) !important;
 }
+
+/* ==========================================================================
+   MY TASKS VIEW - STATS & TASK ROW
+   ========================================================================== */
+.my-tasks-stat-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.my-tasks-stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+}
+
+/* ==========================================================================
+   PAGE HEADING IMPROVEMENTS
+   ========================================================================== */
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-heading h1 {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 4px 0;
+  letter-spacing: -0.5px;
+}
+
+.page-heading .muted {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ==========================================================================
+   PROJECTS GRID
+   ========================================================================== */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.project-card {
+  background: #ffffff;
+  border: 1px solid #e8edf4;
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.project-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6d28d9, #2563eb);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.project-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 20px rgba(109, 40, 217, 0.1);
+  transform: translateY(-2px);
+}
+
+.project-card:hover::before {
+  opacity: 1;
+}
+
+.project-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.project-card-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.project-symbol {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.project-symbol.color-0 { background: linear-gradient(135deg, #6d28d9, #7c3aed); }
+.project-symbol.color-1 { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+.project-symbol.color-2 { background: linear-gradient(135deg, #059669, #10b981); }
+.project-symbol.color-3 { background: linear-gradient(135deg, #d97706, #f59e0b); }
+
+/* ==========================================================================
+   USERS VIEW
+   ========================================================================== */
+.users-table-wrap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+/* ==========================================================================
+   SEARCHBOX COMMON
+   ========================================================================== */
+.searchbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #94a3b8;
+  transition: border-color 0.15s;
+}
+
+.searchbox:focus-within {
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.08);
+  color: #0f172a;
+}
+
+.searchbox input {
+  border: none;
+  background: none;
+  outline: none;
+  color: #0f172a;
+  font-size: 13px;
+  width: 100%;
+}
+
+/* ==========================================================================
+   FADE IN ANIMATION
+   ========================================================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInFromTop {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   ICON BUTTONS
+   ========================================================================== */
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* ==========================================================================
+   KANBAN COLUMN IMPROVEMENTS
+   ========================================================================== */
+.kanban-col {
+  min-width: 260px;
+  width: 260px;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   NOTIFICATION BADGE PULSE
+   ========================================================================== */
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.notif-badge-pulse {
+  animation: pulse-badge 2s infinite;
+}
+
+/* ==========================================================================
+   LOADING SHIMMER
+   ========================================================================== */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f4f8 25%, #e2e8f0 50%, #f0f4f8 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+

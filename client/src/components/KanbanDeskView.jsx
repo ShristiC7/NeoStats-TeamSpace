@@ -127,6 +127,11 @@ export default function KanbanDeskView({ user, projects = [], tasks = [], onOpen
           </h1>
           <p className="muted">Drag and drop tasks across all projects in a unified board view.</p>
         </div>
+        <div className="heading-actions">
+          <button className="btn primary" onClick={() => onOpenAssignTask && onOpenAssignTask()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={15} /> Assign Task
+          </button>
+        </div>
       </div>
 
       {/* Filters Bar */}

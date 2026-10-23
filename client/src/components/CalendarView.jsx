@@ -36,7 +36,7 @@ function getEventsForDay(day, year, month, events) {
   return events.filter(e => isSameDay(new Date(e.date), d));
 }
 
-export default function CalendarView({ user, tasks = [] }) {
+export default function CalendarView({ user, tasks = [], projects = [] }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -46,10 +46,34 @@ export default function CalendarView({ user, tasks = [] }) {
   const [showEventModal, setShowEventModal] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', start: '', end: '', location: '', color: '#6d28d9' });
 
+  // Merge real task due dates with sample events
+  const taskEvents = tasks
+    .filter(t => t.dueDate)
+    .map(t => {
+      const proj = projects.find(p => String(p._id) === String(t.project?._id || t.project));
+      const projColors = ['#6d28d9','#2563eb','#059669','#d97706','#dc2626','#0891b2'];
+      const projIdx = projects.indexOf(proj);
+      const col = projIdx >= 0 ? projColors[projIdx % projColors.length] : '#6d28d9';
+      return {
+        id: 'task-' + t._id,
+        title: t.title,
+        date: new Date(t.dueDate),
+        start: 'Due',
+        end: '',
+        type: t.status === 'done' ? 'done' : (new Date(t.dueDate) < new Date() ? 'overdue' : 'task'),
+        color: t.status === 'done' ? '#16a34a' : (new Date(t.dueDate) < new Date() ? '#dc2626' : col),
+        location: proj ? proj.name : '',
+        attendees: [],
+        isTask: true,
+      };
+    });
+
+  const allEvents = [...events, ...taskEvents];
+
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
   const selectedDate = new Date(viewYear, viewMonth, selectedDay);
-  const selectedEvents = events.filter(e => isSameDay(new Date(e.date), selectedDate));
+  const selectedEvents = allEvents.filter(e => isSameDay(new Date(e.date), selectedDate));
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -121,7 +145,7 @@ export default function CalendarView({ user, tasks = [] }) {
               if (!day) return <div key={`empty-${idx}`} className="calendar-cell empty" />;
               const isToday = isSameDay(new Date(viewYear, viewMonth, day), today);
               const isSelected = day === selectedDay && viewMonth === selectedDate.getMonth() && viewYear === selectedDate.getFullYear();
-              const dayEvents = getEventsForDay(day, viewYear, viewMonth, events);
+              const dayEvents = getEventsForDay(day, viewYear, viewMonth, allEvents);
               return (
                 <div
                   key={day}
@@ -242,3 +266,5 @@ export default function CalendarView({ user, tasks = [] }) {
     </div>
   );
 }
+
+

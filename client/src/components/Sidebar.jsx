@@ -1,5 +1,7 @@
 ﻿import React from 'react';
 import {
+  Mail,
+  Plus,
   Layers,
   Search,
   Home,
@@ -16,7 +18,7 @@ import {
 
 const initials = s => (s || 'U').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
 
-export default function Sidebar({ page, setPage, user, projectsCount, tasksCount, onLogout, notifCount = 0 }) {
+export default function Sidebar({ page, setPage, user, projectsCount, tasksCount, onLogout, notifCount = 0, onOpenAssignTask, onOpenRecentEmails }) {
   const mainNav = [
     { id: 'Overview', label: 'Home', icon: Home },
     { id: 'Projects', label: 'Projects', icon: FolderKanban, badge: projectsCount },
@@ -30,6 +32,7 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
   const othersNav = [
     { id: 'Users', label: 'Team Members', icon: Users, adminOnly: true },
     { id: 'Profile', label: 'Account Settings', icon: Settings },
+    { id: 'EmailLogs', label: 'Email Logs (Feature 1)', icon: Mail, onClick: onOpenRecentEmails },
   ];
 
   return (
@@ -60,7 +63,10 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
             <button
               key={item.id}
               className={`zendo-nav-item ${isActive ? 'active' : ''}`}
-              onClick={() => setPage(item.id)}
+              onClick={() => {
+                if (item.onClick) item.onClick();
+                else setPage(item.id);
+              }}
             >
               <Icon size={17} />
               <span>{item.label}</span>
