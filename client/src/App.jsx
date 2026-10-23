@@ -1,28 +1,572 @@
-import React,{useCallback,useEffect,useMemo,useState}from'react';import{LayoutDashboard,FolderKanban,CheckSquare,Users,Settings,Search,Plus,LogOut,ChevronDown,ArrowUpRight,Clock3,AlertCircle,RefreshCw,MessageSquare,Archive,ShieldCheck,PanelLeftClose}from'lucide-react';import{api}from'./lib/api.js';
-const fmt=s=>s?new Date(s).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'No due date';const initials=s=>(s||'U').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
-function App(){const[token,setToken]=useState(localStorage.getItem('teamspace_token')||'');const[user,setUser]=useState(null);const[projects,setProjects]=useState([]);const[tasks,setTasks]=useState([]);const[users,setUsers]=useState([]);const[activeProject,setActiveProject]=useState('');const[page,setPage]=useState('Overview');const[loading,setLoading]=useState(false);const[error,setError]=useState('');const[notice,setNotice]=useState('');const[search,setSearch]=useState('');const[filter,setFilter]=useState('all');const[modal,setModal]=useState('');const[form,setForm]=useState({});const[taskDetail,setTaskDetail]=useState(null);const[comments,setComments]=useState([]);
-const request=useCallback((path,opts={})=>api(path,{token,...opts}),[token]);
-const load=useCallback(async()=>{if(!token)return;setLoading(true);setError('');try{const [me,p]=await Promise.all([request('/auth/me'),request('/projects')]);setUser(me.user);setProjects(p.data||[]);const pid=activeProject&&p.data.some(x=>x._id===activeProject)?activeProject:p.data[0]?._id||'';setActiveProject(pid);if(pid){const t=await request(`/projects/${pid}/tasks?limit=100`);setTasks(t.data||[])}else setTasks([]);if(me.user.role==='admin'){const us=await request('/users');setUsers(us.data||[])}}catch(e){setError(e.message);if(e.status===401){localStorage.removeItem('teamspace_token');setToken('')}}finally{setLoading(false)}},[token,request,activeProject]);
-useEffect(()=>{if(token)load()},[token]);useEffect(()=>{if(!token||!activeProject)return;request(`/projects/${activeProject}/tasks?limit=100`).then(d=>setTasks(d.data||[])).catch(e=>setError(e.message))},[activeProject,token]);useEffect(()=>{if(!notice)return;const id=setTimeout(()=>setNotice(''),3500);return()=>clearTimeout(id)},[notice]);
-const logout=()=>{localStorage.removeItem('teamspace_token');setToken('');setUser(null);setProjects([]);setTasks([])};
-const doLogin=async(e)=>{e.preventDefault();setError('');try{const d=await api('/auth/login',{method:'POST',body:form});localStorage.setItem('teamspace_token',d.token);setToken(d.token);setUser(d.user)}catch(e){setError(e.message)}};
-const visibleTasks=useMemo(()=>tasks.filter(t=>(filter==='all'||t.status===filter)&&(`${t.title} ${t.description} ${t.assignee?.name||''}`).toLowerCase().includes(search.toLowerCase())),[tasks,filter,search]);
-const canManage=user&&['admin','project_manager'].includes(user.role);const active=projects.find(p=>p._id===activeProject);
-const openCreate=(kind)=>{setForm(kind==='task'?{title:'',description:'',priority:'medium',status:'todo',assignee:'',dueDate:''}:{name:'',description:''});setModal(kind)};
-const submitModal=async(e)=>{e.preventDefault();setError('');try{if(modal==='project'){await request('/projects',{method:'POST',body:form});setNotice('Project created');}if(modal==='task'){await request(`/projects/${activeProject}/tasks`,{method:'POST',body:{...form,assignee:form.assignee||null,dueDate:form.dueDate||null}});setNotice('Task created');}if(modal==='user'){await request('/users',{method:'POST',body:form});setNotice('User created');}setModal('');await load()}catch(e){setError(e.message)}};
-const changeStatus=async(task,status)=>{try{await request(`/tasks/${task._id}`,{method:'PATCH',body:{status,expectedVersion:task.version}});setNotice('Task updated');await load()}catch(e){if(e.status===409){setError('Conflict detected: this task changed in another session. The latest data has been reloaded.');await load()}else setError(e.message)}};
-const openTask=async(t)=>{setTaskDetail(t);setModal('detail');try{const d=await request(`/tasks/${t._id}/comments`);setComments(d.data||[])}catch(e){setError(e.message)}};
-const addComment=async(e)=>{e.preventDefault();try{await request(`/tasks/${taskDetail._id}/comments`,{method:'POST',body:{body:form.comment}});setForm({...form,comment:''});const d=await request(`/tasks/${taskDetail._id}/comments`);setComments(d.data||[])}catch(e){setError(e.message)}};
-if(!token||!user)return <div className="login-wrap"><div className="login-card"><div className="brand-mark">t.</div><p className="eyebrow">TEAMSPACE WORKSPACE</p><h1>Good work starts<br/>with a clear space.</h1><p className="muted">Sign in to your team's project workspace.</p>{error&&<div className="alert"><AlertCircle size={16}/>{error}</div>}<form className="stack" onSubmit={doLogin}><label>Email address<input type="email" required placeholder="you@company.com" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Password<input type="password" required placeholder="Enter your password" value={form.password||''} onChange={e=>setForm({...form,password:e.target.value})}/></label><button className="btn primary full">Sign in <ArrowUpRight size={16}/></button></form><div className="demo-box"><b>Demo accounts</b><span>admin@teamspace.local · Admin123!</span><span>manager@teamspace.local · Manager123!</span><span>member@teamspace.local · Member123!</span><span>viewer@teamspace.local · Viewer123!</span><button className="text-btn" onClick={()=>setForm({email:'admin@teamspace.local',password:'Admin123!'})}>Fill admin login</button></div></div><div className="login-art"><div className="art-top"><span>MONDAY, OCTOBER 23</span><span>✳ TEAMSPACE</span></div><div className="art-content"><span className="art-tag">A LITTLE MORE IN SYNC</span><h2>Big ideas,<br/>moving forward.</h2><p>One shared space for the people<br/>and work that move things ahead.</p><div className="floating-task"><span className="task-check">✓</span><div><b>Launch website refresh</b><small>Design · Due in 3 days</small></div><span className="avatar mini">AM</span></div><div className="art-foot"><span>Make progress visible.</span><span>01 — 04</span></div></div></div></div>;
-return <div className="app-shell"><aside className="sidebar"><div className="brand-row"><div className="brand-mark small">t.</div><div><b>teamspace</b><small>PROJECT WORKSPACE</small></div><button className="icon-btn mobile-hide" title="Collapse sidebar"><PanelLeftClose size={17}/></button></div><div className="workspace-switch"><div className="workspace-icon">N</div><div><b>Northstar Studio</b><small>Free workspace</small></div><ChevronDown size={15}/></div><div className="nav-label">WORKSPACE</div><nav><button className={page==='Overview'?'nav-item selected':'nav-item'} onClick={()=>setPage('Overview')}><LayoutDashboard size={17}/>Overview</button><button className={page==='Projects'?'nav-item selected':'nav-item'} onClick={()=>setPage('Projects')}><FolderKanban size={17}/>Projects<span className="nav-count">{projects.length}</span></button><button className={page==='My tasks'?'nav-item selected':'nav-item'} onClick={()=>setPage('My tasks')}><CheckSquare size={17}/>My tasks</button>{user.role==='admin'&&<button className={page==='Team'?'nav-item selected':'nav-item'} onClick={()=>setPage('Team')}><Users size={17}/>Team members</button>}</nav><div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✳</div><b>Make space for focus.</b><p>Keep your team aligned, one task at a time.</p></div><button className="nav-item" onClick={()=>setPage('Settings')}><Settings size={17}/>Settings</button><div className="profile-row"><div className="avatar">{initials(user.name)}</div><div className="profile-meta"><b>{user.name}</b><small>{user.role.replace('_',' ')}</small></div><button className="icon-btn" title="Sign out" onClick={logout}><LogOut size={16}/></button></div></div></aside>
-<main className="main-area"><header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="slash">/</span><b>{page}</b></div><div className="top-actions"><div className="searchbox"><Search size={16}/><input placeholder="Search tasks..." value={search} onChange={e=>setSearch(e.target.value)}/><kbd>⌘ K</kbd></div><button className="icon-btn notification" title="Notifications"><span className="dot"></span><Clock3 size={17}/></button><div className="avatar">{initials(user.name)}</div></div></header>
-<div className="content"><div className="page-heading"><div><p className="eyebrow">{new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</p><h1>{page==='Overview'?'Good morning':page==='My tasks'?'Your tasks':page==='Team'?'Your team':page==='Settings'?'Workspace settings':page}</h1><p className="muted">{page==='Overview'?'Here’s what’s happening across your workspace.':page==='My tasks'?'A focused view of work that needs your attention.':page==='Projects'?'Projects bring people and priorities together.':'A thoughtful overview of your team’s work.'}</p></div><div className="heading-actions">{canManage&&<button className="btn primary" onClick={()=>openCreate(page==='Projects'?'project':'task')}><Plus size={16}/>{page==='Projects'?'New project':'New task'}</button>}{user.role==='admin'&&page==='Team'&&<button className="btn primary" onClick={()=>openCreate('user')}><Plus size={16}/>Add member</button>}</div></div>
-{error&&<div className="alert global-alert"><AlertCircle size={16}/>{error}<button className="text-btn" onClick={()=>setError('')}>Dismiss</button></div>}{notice&&<div className="notice"><ShieldCheck size={16}/>{notice}</div>}
-{page==='Settings'?<div className="panel settings-panel"><h3>Workspace settings</h3><p className="muted">You're signed in as {user.email}. Role-based access is enforced by the API.</p><button className="btn secondary" onClick={load}><RefreshCw size={15}/>Refresh workspace data</button><button className="btn secondary" onClick={logout}><LogOut size={15}/>Sign out</button></div>:page==='Team'&&user.role==='admin'?<div className="panel"><div className="panel-heading"><div><h3>Team members</h3><p className="muted">Manage workspace accounts and access.</p></div><span className="count-pill">{users.length} members</span></div><div className="table-wrap"><table><thead><tr><th>MEMBER</th><th>ROLE</th><th>STATUS</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td><div className="person-cell"><div className="avatar">{initials(u.name)}</div><div><b>{u.name}</b><small>{u.email}</small></div></div></td><td><span className="role-pill">{u.role.replace('_',' ')}</span></td><td><span className={u.active?'status-dot active':'status-dot'}>{u.active?'Active':'Inactive'}</span></td></tr>)}</tbody></table></div></div>:<><section className="stats-grid"><div className="stat-card"><div className="stat-top"><span>Active projects</span><span className="stat-icon lavender"><FolderKanban size={17}/></span></div><div className="stat-value">{projects.filter(p=>p.status==='active').length}<span className="stat-note">in workspace</span></div><div className="stat-foot"><span className="tiny-dot purple"></span>Across your team</div></div><div className="stat-card"><div className="stat-top"><span>Open tasks</span><span className="stat-icon mint"><CheckSquare size={17}/></span></div><div className="stat-value">{tasks.filter(t=>t.status!=='done').length}<span className="stat-note">to keep moving</span></div><div className="stat-foot"><span className="tiny-dot green"></span>{tasks.filter(t=>t.status==='done').length} completed in this project</div></div><div className="stat-card"><div className="stat-top"><span>Needs attention</span><span className="stat-icon peach"><AlertCircle size={17}/></span></div><div className="stat-value">{tasks.filter(t=>t.status==='blocked'||t.priority==='urgent').length}<span className="stat-note">tasks</span></div><div className="stat-foot"><span className="tiny-dot orange"></span>Blocked or urgent work</div></div></section>
-<div className="dashboard-grid"><section className="panel projects-panel"><div className="panel-heading"><div><h3>{page==='My tasks'?'Tasks assigned to you':'Your projects'}</h3><p className="muted">{page==='My tasks'?'Keep an eye on what’s next.':'A snapshot of the work in motion.'}</p></div><button className="text-btn" onClick={()=>setPage('Projects')}>View all <ArrowUpRight size={14}/></button></div>{projects.length===0?<div className="empty"><FolderKanban size={24}/><b>No projects yet</b><span>Projects you can access will appear here.</span></div>:<div className="project-list">{projects.map((p,i)=><button key={p._id} className={`project-row ${activeProject===p._id?'project-active':''}`} onClick={()=>{setActiveProject(p._id);setPage('Overview')}}><div className={`project-symbol color-${i%4}`}>{p.name.slice(0,1).toUpperCase()}</div><div className="project-info"><b>{p.name}</b><small>{p.description||'No description yet'}</small></div><div className="project-meta"><span className={p.status==='archived'?'tag archived':'tag'}>{p.status}</span><span className="member-stack">{(p.members||[]).slice(0,3).map((m,j)=><span className={`avatar stack-${j}`} key={String(m.user?._id||m.user)} title={m.user?.name}>{initials(m.user?.name||'M')}</span>)}</span></div><ArrowUpRight size={16} className="row-arrow"/></button>)}</div>}</section>
-<section className="panel focus-panel"><div className="panel-heading"><div><h3>Project focus</h3><p className="muted">A closer look at your selected project.</p></div><span className="focus-spark">✳</span></div>{active?<><div className="focus-project"><div className="focus-symbol">{active.name.slice(0,1).toUpperCase()}</div><div><b>{active.name}</b><small>{active.members?.length||0} team members · {tasks.length} tasks</small></div></div><p className="focus-description">{active.description||'A shared space for your team to make progress.'}</p><div className="progress-label"><span>Task progress</span><b>{tasks.length?Math.round(tasks.filter(t=>t.status==='done').length/tasks.length*100):0}%</b></div><div className="progress-track"><div style={{width:`${tasks.length?tasks.filter(t=>t.status==='done').length/tasks.length*100:0}%`}}/></div><div className="focus-bottom"><span><span className="tiny-dot green"></span>{tasks.filter(t=>t.status==='done').length} done</span><span>{tasks.filter(t=>t.status!=='done').length} remaining</span></div><button className="btn secondary full" onClick={()=>setPage('Projects')}>Explore project <ArrowUpRight size={15}/></button></>:<div className="empty">Choose a project to see details.</div>}</section></div>
-<section className="panel tasks-panel"><div className="panel-heading task-panel-head"><div><h3>{page==='My tasks'?'My task list':'Tasks in focus'}</h3><p className="muted">Small steps add up to meaningful progress.</p></div><div className="task-tools"><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All statuses</option><option value="todo">To do</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="done">Done</option></select><button className="icon-btn" title="Refresh" onClick={load}><RefreshCw size={15}/></button></div></div><div className="table-wrap"><table><thead><tr><th>TASK</th><th>ASSIGNEE</th><th>PRIORITY</th><th>STATUS</th><th>DUE DATE</th><th></th></tr></thead><tbody>{visibleTasks.map(t=><tr key={t._id}><td><button className="task-title" onClick={()=>openTask(t)}><span className={`task-check-small ${t.status==='done'?'checked':''}`}>{t.status==='done'?'✓':''}</span><span><b>{t.title}</b><small>{t.description||'No description'}</small></span></button></td><td><div className="assignee"><div className="avatar small-avatar">{initials(t.assignee?.name||'Unassigned')}</div><span>{t.assignee?.name||'Unassigned'}</span></div></td><td><span className={`priority ${t.priority}`}>{t.priority}</span></td><td>{canManage||String(t.assignee?._id)===String(user._id)&&user.role==='team_member'?<select className={`status-select ${t.status}`} value={t.status} onChange={e=>changeStatus(t,e.target.value)}><option value="todo">To do</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="done">Done</option></select>:<span className={`status-label ${t.status}`}>{t.status.replace('_',' ')}</span>}</td><td><span className="due-date">{fmt(t.dueDate)}</span></td><td><button className="icon-btn row-more" title="View task" onClick={()=>openTask(t)}><ArrowUpRight size={15}/></button></td></tr>)}</tbody></table>{visibleTasks.length===0&&<div className="empty"><CheckSquare size={24}/><b>Nothing on the list</b><span>Try another filter or create a new task.</span></div>}</div><div className="table-footer"><span>Showing {visibleTasks.length} of {tasks.length} tasks</span><span>Last synced just now <span className="tiny-dot green"/></span></div></section></>}
-<footer className="footer"><span>© 2026 Teamspace</span><span>Made for thoughtful teamwork <span>✳</span></span></footer></div></main>
-{modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal('')}}>{modal==='detail'?<div className="modal task-modal"><div className="modal-top"><span className="eyebrow">TASK DETAILS</span><button className="icon-btn" onClick={()=>setModal('')}>✕</button></div><h2>{taskDetail?.title}</h2><p className="muted">{taskDetail?.description||'No description provided.'}</p><div className="detail-meta"><span className={`priority ${taskDetail?.priority}`}>{taskDetail?.priority}</span><span className={`status-label ${taskDetail?.status}`}>{taskDetail?.status?.replace('_',' ')}</span><span>Version {taskDetail?.version}</span></div><div className="comments"><h3><MessageSquare size={16}/> Comments <span>{comments.length}</span></h3>{comments.map(c=><div className="comment" key={c._id}><div className="avatar small-avatar">{initials(c.author?.name)}</div><div><b>{c.author?.name}</b><small>{new Date(c.createdAt).toLocaleString()}</small><p>{c.body}</p></div></div>)}{user.role!=='viewer'&&<form className="comment-form" onSubmit={addComment}><textarea placeholder="Add a thoughtful comment…" required value={form.comment||''} onChange={e=>setForm({...form,comment:e.target.value})}/><button className="btn primary">Add comment</button></form>}</div></div>:<form className="modal" onSubmit={submitModal}><div className="modal-top"><span className="eyebrow">{modal==='project'?'WORKSPACE / PROJECTS':modal==='task'?'PROJECT / TASKS':'WORKSPACE / TEAM'}</span><button type="button" className="icon-btn" onClick={()=>setModal('')}>✕</button></div><h2>{modal==='project'?'Create a project':modal==='task'?'Create a task':'Add a team member'}</h2><p className="muted">{modal==='project'?'Give the team a clear place to work together.':modal==='task'?'Break the project into a concrete next step.':'Create a workspace account.'}</p>{modal==='user'?<><label>Full name<input required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Email<input type="email" required value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Temporary password<input type="password" minLength="8" required value={form.password||''} onChange={e=>setForm({...form,password:e.target.value})}/></label><label>Workspace role<select value={form.role||'team_member'} onChange={e=>setForm({...form,role:e.target.value})}><option value="admin">Admin</option><option value="project_manager">Project Manager</option><option value="team_member">Team Member</option><option value="viewer">Viewer</option></select></label></>:<><label>{modal==='project'?'Project name':'Task title'}<input required maxLength="180" value={form.name||form.title||''} onChange={e=>setForm({...form,[modal==='project'?'name':'title']:e.target.value})}/></label><label>Description<textarea rows="3" value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/></label>{modal==='project'?null:<><div className="form-row"><label>Priority<select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></label><label>Due date<input type="date" value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})}/></label></div><label>Assign to<select value={form.assignee} onChange={e=>setForm({...form,assignee:e.target.value})}><option value="">Unassigned</option>{(active?.members||[]).map(m=><option key={m.user?._id||m.user} value={m.user?._id||m.user}>{m.user?.name||'Member'}</option>)}</select></label></>}</>}{error&&<div className="alert">{error}</div>}<div className="modal-actions"><button type="button" className="btn secondary" onClick={()=>setModal('')}>Cancel</button><button className="btn primary">Create {modal==='project'?'project':modal==='task'?'task':'member'}</button></div></form>}</div>}
-</div>}
-export default App;
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  AlertCircle,
+  ShieldCheck,
+  Search,
+  Plus,
+  RefreshCw,
+  LogOut,
+  FolderKanban,
+  CheckSquare
+} from 'lucide-react';
+
+import { api } from './lib/api.js';
+
+import DemoBar from './components/DemoBar.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import LoginView from './components/LoginView.jsx';
+import DashboardView from './components/DashboardView.jsx';
+import ProjectsView from './components/ProjectsView.jsx';
+import ProjectDetailView from './components/ProjectDetailView.jsx';
+import UsersView from './components/UsersView.jsx';
+import ProfileView from './components/ProfileView.jsx';
+import TaskDetailModal from './components/TaskDetailModal.jsx';
+
+export default function App() {
+  const [token, setToken] = useState(localStorage.getItem('teamspace_token') || '');
+  const [user, setUser] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [activeProject, setActiveProject] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [assignableUsers, setAssignableUsers] = useState([]);
+
+  const [page, setPage] = useState('Overview'); // 'Overview' | 'Projects' | 'Tasks' | 'Users' | 'Profile'
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  // Task Detail Modal State
+  const [taskDetail, setTaskDetail] = useState(null);
+  const [taskComments, setTaskComments] = useState([]);
+
+  const request = useCallback((path, opts = {}) => api(path, { token, ...opts }), [token]);
+
+  // Load all initial data
+  const loadWorkspace = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const [meRes, projRes, assignableRes] = await Promise.all([
+        request('/auth/me'),
+        request('/projects'),
+        request('/users/assignable')
+      ]);
+
+      setUser(meRes.user);
+      setProjects(projRes.data || []);
+      setAssignableUsers(assignableRes.data || []);
+
+      const pList = projRes.data || [];
+      const pid = activeProject && pList.some(p => p._id === activeProject)
+        ? activeProject
+        : (pList[0]?._id || '');
+      setActiveProject(pid);
+
+      if (pid) {
+        const tRes = await request(`/projects/${pid}/tasks?limit=200`);
+        setTasks(tRes.data || []);
+      } else {
+        setTasks([]);
+      }
+
+      if (meRes.user.role === 'admin') {
+        const uRes = await request('/users');
+        setUsers(uRes.data || []);
+      }
+    } catch (err) {
+      setError(err.message);
+      if (err.status === 401) {
+        localStorage.removeItem('teamspace_token');
+        setToken('');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token, request, activeProject]);
+
+  useEffect(() => {
+    if (token) loadWorkspace();
+  }, [token]);
+
+  // Refresh tasks whenever active project changes
+  useEffect(() => {
+    if (!token || !activeProject) return;
+    request(`/projects/${activeProject}/tasks?limit=200`)
+      .then(res => setTasks(res.data || []))
+      .catch(err => setError(err.message));
+  }, [activeProject, token, request]);
+
+  // Auto-dismiss notices after 4 seconds
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  // Auth Operations
+  const handleLogin = async (email, password) => {
+    setError('');
+    try {
+      const res = await api('/auth/login', {
+        method: 'POST',
+        body: { email, password }
+      });
+      localStorage.setItem('teamspace_token', res.token);
+      setToken(res.token);
+      setUser(res.user);
+      setNotice(`Welcome back, ${res.user.name}!`);
+    } catch (err) {
+      setError(err.message || 'Login failed. Check credentials.');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('teamspace_token');
+    setToken('');
+    setUser(null);
+    setProjects([]);
+    setTasks([]);
+    setPage('Overview');
+  };
+
+  // Quick Switcher from Demo Bar
+  const handleSwitchRole = async (email, password) => {
+    await handleLogin(email, password);
+  };
+
+  // Project Operations
+  const handleCreateProject = async (form) => {
+    try {
+      const res = await request('/projects', { method: 'POST', body: form });
+      setNotice('Project created successfully!');
+      await loadWorkspace();
+      setActiveProject(res.project._id);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleToggleArchive = async (project) => {
+    try {
+      const newStatus = project.status === 'archived' ? 'active' : 'archived';
+      await request(`/projects/${project._id}`, {
+        method: 'PATCH',
+        body: { status: newStatus }
+      });
+      setNotice(`Project ${newStatus === 'archived' ? 'archived' : 'restored'} successfully.`);
+      await loadWorkspace();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDeleteProject = async (projectId) => {
+    if (!window.confirm('Are you sure you want to permanently delete this project and all its tasks?')) return;
+    try {
+      await request(`/projects/${projectId}/permanent`, { method: 'DELETE' });
+      setNotice('Project permanently deleted.');
+      setSelectedProjectId(null);
+      await loadWorkspace();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Membership Operations
+  const handleAddMember = async (projectId, userId, role) => {
+    try {
+      await request(`/projects/${projectId}/members/${userId}`, {
+        method: 'POST',
+        body: { role }
+      });
+      setNotice('Team member added to project.');
+      await loadWorkspace();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleChangeMemberRole = async (projectId, userId, newRole) => {
+    try {
+      await request(`/projects/${projectId}/members/${userId}`, {
+        method: 'PATCH',
+        body: { role: newRole }
+      });
+      setNotice('Project member role updated.');
+      await loadWorkspace();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleRemoveMember = async (projectId, userId) => {
+    if (!window.confirm('Remove this member from the project?')) return;
+    try {
+      await request(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' });
+      setNotice('Member removed from project.');
+      await loadWorkspace();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Task Operations
+  const handleCreateTask = async (taskData) => {
+    const pId = selectedProjectId || activeProject;
+    try {
+      await request(`/projects/${pId}/tasks`, {
+        method: 'POST',
+        body: taskData
+      });
+      setNotice('Task created successfully!');
+      const res = await request(`/projects/${pId}/tasks?limit=200`);
+      setTasks(res.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleUpdateTask = async (taskId, patch) => {
+    const res = await request(`/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: patch
+    });
+    setNotice('Task updated successfully.');
+    // Update local task state
+    setTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
+    if (taskDetail?._id === taskId) {
+      setTaskDetail(res.task);
+    }
+    return res.task;
+  };
+
+  const handleChangeStatus = async (task, newStatus) => {
+    try {
+      const updated = await handleUpdateTask(task._id, {
+        status: newStatus,
+        expectedVersion: task.version
+      });
+      setNotice(`Task moved to ${newStatus.replace('_', ' ')} (v${updated.version})`);
+    } catch (err) {
+      if (err.status === 409) {
+        setError('Optimistic Concurrency Conflict: Task changed in another session. Refreshed with latest data.');
+        await loadWorkspace();
+      } else {
+        setError(err.message);
+      }
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Delete this task and all its comments?')) return;
+    try {
+      await request(`/tasks/${taskId}`, { method: 'DELETE' });
+      setNotice('Task deleted.');
+      setTaskDetail(null);
+      setTasks(prev => prev.filter(t => t._id !== taskId));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Simulate 409 Concurrency Conflict
+  const handleSimulateConflict = async (targetTask) => {
+    // 1. Behind the scenes, trigger a concurrent edit on the server to bump its version to targetTask.version + 1
+    await request(`/tasks/${targetTask._id}`, {
+      method: 'PATCH',
+      body: {
+        status: targetTask.status === 'done' ? 'in_progress' : 'done',
+        expectedVersion: targetTask.version
+      }
+    });
+
+    // 2. Now attempt to save with the old expectedVersion
+    return await request(`/tasks/${targetTask._id}`, {
+      method: 'PATCH',
+      body: {
+        title: targetTask.title + ' [Conflicting Edit]',
+        expectedVersion: targetTask.version // STALE! Server is now at version + 1
+      }
+    });
+  };
+
+  const handleOpenTask = async (task) => {
+    setTaskDetail(task);
+    try {
+      const res = await request(`/tasks/${task._id}/comments`);
+      setTaskComments(res.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleReloadTask = async (taskId) => {
+    try {
+      const res = await request(`/tasks/${taskId}`);
+      setTaskDetail(res.task);
+      setTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
+      const cRes = await request(`/tasks/${taskId}/comments`);
+      setTaskComments(cRes.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleAddComment = async (taskId, body) => {
+    const res = await request(`/tasks/${taskId}/comments`, {
+      method: 'POST',
+      body: { body }
+    });
+    setTaskComments(prev => [...prev, res.comment]);
+    setNotice('Comment posted.');
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    await request(`/comments/${commentId}`, { method: 'DELETE' });
+    setTaskComments(prev => prev.filter(c => c._id !== commentId));
+    setNotice('Comment deleted.');
+  };
+
+  // User Administration Operations (Admin)
+  const handleCreateUser = async (formData) => {
+    try {
+      await request('/users', { method: 'POST', body: formData });
+      setNotice('New user account created successfully.');
+      const res = await request('/users');
+      setUsers(res.data || []);
+      const aRes = await request('/users/assignable');
+      setAssignableUsers(aRes.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleUpdateUser = async (userId, patch) => {
+    try {
+      await request(`/users/${userId}`, { method: 'PATCH', body: patch });
+      setNotice('User updated successfully.');
+      const res = await request('/users');
+      setUsers(res.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleToggleActive = async (userId) => {
+    try {
+      await request(`/users/${userId}/toggle-active`, { method: 'PATCH' });
+      setNotice('User status toggled successfully.');
+      const res = await request('/users');
+      setUsers(res.data || []);
+      const aRes = await request('/users/assignable');
+      setAssignableUsers(aRes.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // If not authenticated, render LoginView
+  if (!token || !user) {
+    return (
+      <LoginView
+        onLogin={handleLogin}
+        error={error}
+      />
+    );
+  }
+
+  const selectedProject = projects.find(p => p._id === (selectedProjectId || activeProject));
+
+  return (
+    <div className="app-shell">
+      {/* PERSISTENT DEMO BAR FOR HACKATHON EVALUATORS */}
+      <DemoBar
+        currentUser={user}
+        onSwitchRole={handleSwitchRole}
+      />
+
+      {/* SIDEBAR NAVIGATION */}
+      <Sidebar
+        page={selectedProjectId ? 'Projects' : page}
+        setPage={(newPage) => {
+          setSelectedProjectId(null);
+          setPage(newPage);
+        }}
+        user={user}
+        projectsCount={projects.length}
+        tasksCount={tasks.filter(t => t.status !== 'done').length}
+        onLogout={handleLogout}
+      />
+
+      <main className="main-area">
+        {/* TOPBAR */}
+        <header className="topbar">
+          <div className="breadcrumbs">
+            <span>Workspace</span>
+            <span className="slash">/</span>
+            <span>{selectedProjectId ? selectedProject?.name : page}</span>
+          </div>
+
+          <div className="searchbox">
+            <Search size={15} />
+            <input
+              placeholder="Search across tasks..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="top-actions">
+            <button className="icon-btn" title="Refresh workspace data" onClick={loadWorkspace}>
+              <RefreshCw size={16} />
+            </button>
+            <div
+              className="avatar"
+              title={`${user.name} (${user.role})`}
+              style={{ background: '#4f46e5', color: '#fff', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}
+            >
+              {user.name.slice(0, 2).toUpperCase()}
+            </div>
+          </div>
+        </header>
+
+        {/* NOTICES AND ALERTS */}
+        <div className="content">
+          {error && (
+            <div className="alert global-alert">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+              <button className="text-btn" onClick={() => setError('')}>Dismiss</button>
+            </div>
+          )}
+
+          {notice && (
+            <div className="notice">
+              <ShieldCheck size={16} />
+              <span>{notice}</span>
+            </div>
+          )}
+
+          {/* VIEW SWITCHING */}
+          {selectedProjectId && selectedProject ? (
+            <ProjectDetailView
+              project={selectedProject}
+              tasks={tasks}
+              user={user}
+              onBack={() => setSelectedProjectId(null)}
+              onOpenTask={handleOpenTask}
+              onCreateTask={handleCreateTask}
+              onUpdateProject={async (patch) => {
+                await request(`/projects/${selectedProject._id}`, { method: 'PATCH', body: patch });
+                await loadWorkspace();
+              }}
+              onToggleArchive={handleToggleArchive}
+              onDeleteProject={handleDeleteProject}
+              onAddMember={handleAddMember}
+              onChangeMemberRole={handleChangeMemberRole}
+              onRemoveMember={handleRemoveMember}
+              onChangeStatus={handleChangeStatus}
+              assignableUsers={assignableUsers}
+            />
+          ) : page === 'Overview' ? (
+            <DashboardView
+              user={user}
+              projects={projects}
+              tasks={tasks}
+              activeProject={activeProject}
+              setActiveProject={setActiveProject}
+              onOpenProject={(pid) => {
+                if (pid) setSelectedProjectId(pid);
+                else setPage('Projects');
+              }}
+              onOpenTask={handleOpenTask}
+              onChangeStatus={handleChangeStatus}
+              onRefresh={loadWorkspace}
+              filter={filter}
+              setFilter={setFilter}
+              search={search}
+              setSearch={setSearch}
+            />
+          ) : page === 'Projects' ? (
+            <ProjectsView
+              user={user}
+              projects={projects}
+              onSelectProject={(pid) => setSelectedProjectId(pid)}
+              onCreateProject={handleCreateProject}
+              onToggleArchive={handleToggleArchive}
+              assignableUsers={assignableUsers}
+            />
+          ) : page === 'Tasks' ? (
+            <div className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Workspace Task Board</h3>
+                  <p className="muted">Tasks across active project: <b>{selectedProject?.name || 'All'}</b></p>
+                </div>
+              </div>
+              <div style={{ padding: '0 20px 20px' }}>
+                <DashboardView
+                  user={user}
+                  projects={projects}
+                  tasks={tasks}
+                  activeProject={activeProject}
+                  setActiveProject={setActiveProject}
+                  onOpenProject={(pid) => setSelectedProjectId(pid)}
+                  onOpenTask={handleOpenTask}
+                  onChangeStatus={handleChangeStatus}
+                  onRefresh={loadWorkspace}
+                  filter={filter}
+                  setFilter={setFilter}
+                  search={search}
+                  setSearch={setSearch}
+                />
+              </div>
+            </div>
+          ) : page === 'Users' ? (
+            <UsersView
+              users={users}
+              currentUser={user}
+              onCreateUser={handleCreateUser}
+              onUpdateUser={handleUpdateUser}
+              onToggleActive={handleToggleActive}
+            />
+          ) : page === 'Profile' ? (
+            <ProfileView
+              user={user}
+              onLogout={handleLogout}
+            />
+          ) : null}
+
+          {/* TASK DETAIL DRAWER & CONFLICT RESOLUTION MODAL */}
+          {taskDetail && (
+            <TaskDetailModal
+              task={taskDetail}
+              user={user}
+              project={selectedProject || projects.find(p => p._id === taskDetail.project?._id || p._id === taskDetail.project)}
+              comments={taskComments}
+              onClose={() => setTaskDetail(null)}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onAddComment={handleAddComment}
+              onDeleteComment={handleDeleteComment}
+              onSimulateConflict={handleSimulateConflict}
+              onReloadTask={handleReloadTask}
+            />
+          )}
+
+          <footer className="footer" style={{ marginTop: 40, borderTop: '1px solid #e2e8f0', paddingTop: 20 }}>
+            <span>© 2026 Teamspace · NeoStats Full Stack Engineering Hackathon</span>
+            <span>Optimistic Concurrency & Server-Enforced RBAC Enabled</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+  );
+}
