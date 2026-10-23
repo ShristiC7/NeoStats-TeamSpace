@@ -1,5 +1,19 @@
 ﻿import { z } from 'zod';
 
+// URL validator helper - allows empty/null, accepts http/https only, rejects javascript:
+const safeUrl = z.string()
+  .trim()
+  .transform(v => v || null)
+  .refine(v => {
+    if (!v) return true; // optional
+    try {
+      const url = new URL(v);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch { return false; }
+  }, { message: 'Must be a valid http:// or https:// URL' })
+  .nullable()
+  .optional();
+
 export const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(1, 'Password is required')
@@ -33,13 +47,17 @@ export const updateUserSchema = z.object({
 export const createProjectSchema = z.object({
   name: z.string().trim().min(1, 'Project name is required').max(120, 'Name cannot exceed 120 characters'),
   description: z.string().max(2000).optional().default(''),
-  managerId: z.string().optional().nullable()
+  managerId: z.string().optional().nullable(),
+  liveDemoUrl: safeUrl,
+  githubUrl: safeUrl
 });
 
 export const updateProjectSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
-  status: z.enum(['active', 'archived']).optional()
+  status: z.enum(['active', 'archived']).optional(),
+  liveDemoUrl: safeUrl,
+  githubUrl: safeUrl
 });
 
 export const memberRoleSchema = z.object({
