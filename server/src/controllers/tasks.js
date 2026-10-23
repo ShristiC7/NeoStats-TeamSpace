@@ -1,7 +1,9 @@
 ﻿import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import Comment from '../models/Comment.js';
+import User from '../models/User.js';
 import { getProjectAccess, forbidden, notFound, conflict, isAdmin } from '../utils/access.js';
+import { sendTaskAssignedEmail, sendTaskCompletedEmail } from '../services/emailService.js';
 
 export async function getTask(req, res) {
   const t = await Task.findById(req.params.id)
@@ -20,7 +22,8 @@ export async function getTask(req, res) {
 }
 
 export async function updateTask(req, res) {
-  const current = await Task.findById(req.params.id);
+  const current = await Task.findById(req.params.id)
+    .populate('assignee', 'name email role');
   if (!current) return notFound(res, 'Task not found.');
 
   const a = await getProjectAccess(req.user, current.project);
@@ -29,14 +32,12 @@ export async function updateTask(req, res) {
   }
 
   const manager = !!a.isManager;
-  const isAssigned = String(current.assignee || '') === String(req.user._id);
+  const isAssigned = String(current.assignee?._id || current.assignee || '') === String(req.user._id);
 
-  // Viewers cannot update
   if (req.user.role === 'viewer') {
     return forbidden(res, 'Viewers have read-only access and cannot edit tasks.');
   }
 
-  // Non-managers can only update if they are team_members assigned to the task
   if (!manager && !(req.user.role === 'team_member' && isAssigned)) {
     return forbidden(res, 'You may only update tasks that are assigned to you.');
   }
@@ -58,7 +59,6 @@ export async function updateTask(req, res) {
     }
   }
 
-  // Disallow non-managers from editing restricted fields
   if (!manager) {
     const attemptedFields = Object.keys(req.body).filter(k => k !== 'expectedVersion' && k !== 'status');
     if (attemptedFields.length > 0) {
@@ -66,25 +66,23 @@ export async function updateTask(req, res) {
     }
   }
 
-  // Validate assignee is in project
   if (patch.assignee) {
     const isMember = a.project.members.some(m => String(m.user) === String(patch.assignee));
     if (!isMember) {
-      return res.status(422).json({
-        error: { code: 'VALIDATION_ERROR', message: 'Assignee must be an active project member.' }
-      });
+      return res.status(422).json({ error: { code: 'VALIDATION_ERROR', message: 'Assignee must be an active project member.' } });
     }
   }
 
-  // Optimistic Concurrency Control Check
+  // Capture pre-update state for email logic
+  const previousAssigneeId = String(current.assignee?._id || current.assignee || '');
+  const previousStatus = current.status;
+
+  // Optimistic Concurrency Control
   const expected = Number(req.body.expectedVersion);
   if (!Number.isInteger(expected) || expected < 0) {
-    return res.status(422).json({
-      error: { code: 'VERSION_REQUIRED', message: 'expectedVersion (integer) is required to prevent concurrent write collisions.' }
-    });
+    return res.status(422).json({ error: { code: 'VERSION_REQUIRED', message: 'expectedVersion (integer) is required to prevent concurrent write collisions.' } });
   }
 
-  // Atomic conditional update
   const updated = await Task.findOneAndUpdate(
     { _id: current._id, version: expected },
     { $set: patch, $inc: { version: 1 } },
@@ -112,6 +110,59 @@ export async function updateTask(req, res) {
       }
     });
   }
+
+  // Post-update email notifications (after successful persist)
+  const projectName = updated.project?.name || a.project.name;
+
+  setImmediate(async () => {
+    try {
+      // Assignment notification: new assignee or changed assignee
+      const newAssigneeId = String(updated.assignee?._id || updated.assignee || '');
+      const assigneeChanged = patch.assignee !== undefined && newAssigneeId && newAssigneeId !== previousAssigneeId;
+
+      if (assigneeChanged && updated.assignee) {
+        await sendTaskAssignedEmail({
+          task: updated,
+          assignee: updated.assignee,
+          assigner: req.user,
+          projectName
+        });
+      }
+
+      // Completion notification: status transitioned to 'done'
+      const statusChangedToDone = patch.status === 'done' && previousStatus !== 'done';
+
+      if (statusChangedToDone) {
+        // Find admin users and the project managers for this project
+        const adminUsers = await User.find({ role: 'admin', active: true }).select('name email');
+        const managerIds = a.project.members
+          .filter(m => m.role === 'manager')
+          .map(m => String(m.user));
+
+        let pmUsers = [];
+        if (managerIds.length > 0) {
+          pmUsers = await User.find({ _id: { $in: managerIds }, active: true }).select('name email');
+        }
+
+        // Deduplicate by email
+        const seenEmails = new Set();
+        const recipients = [...adminUsers, ...pmUsers].filter(u => {
+          if (!u.email || seenEmails.has(u.email)) return false;
+          seenEmails.add(u.email);
+          return true;
+        });
+
+        await sendTaskCompletedEmail({
+          task: updated,
+          completedBy: req.user,
+          projectName,
+          recipients
+        });
+      }
+    } catch (err) {
+      console.error('[updateTask] Email notification error (non-fatal):', err.message);
+    }
+  });
 
   res.json({ task: updated });
 }
@@ -164,18 +215,10 @@ export async function createComment(req, res) {
 
   const body = String(req.body.body || '').trim();
   if (!body) {
-    return res.status(422).json({
-      error: { code: 'VALIDATION_ERROR', message: 'Comment cannot be empty.' }
-    });
+    return res.status(422).json({ error: { code: 'VALIDATION_ERROR', message: 'Comment cannot be empty.' } });
   }
 
-  const c = await Comment.create({
-    task: t._id,
-    project: t.project,
-    author: req.user._id,
-    body
-  });
-
+  const c = await Comment.create({ task: t._id, project: t.project, author: req.user._id, body });
   const populated = await Comment.findById(c._id).populate('author', 'name email role');
   res.status(201).json({ comment: populated });
 }

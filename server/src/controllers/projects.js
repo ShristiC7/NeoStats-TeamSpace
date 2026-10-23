@@ -1,7 +1,8 @@
 ﻿import Project from '../models/Project.js';
-import User from '../models/User.js';
 import Task from '../models/Task.js';
+import User from '../models/User.js';
 import { getProjectAccess, forbidden, notFound, isAdmin } from '../utils/access.js';
+import { sendTaskAssignedEmail, sendTaskCompletedEmail } from '../services/emailService.js';
 
 export async function listProjects(req, res) {
   let q = {};
@@ -14,9 +15,7 @@ export async function listProjects(req, res) {
     };
   }
 
-  if (req.query.status && req.query.status !== 'all') {
-    q.status = req.query.status;
-  }
+  if (req.query.status && req.query.status !== 'all') q.status = req.query.status;
 
   if (req.query.search) {
     const s = String(req.query.search).trim();
@@ -38,7 +37,7 @@ export async function listProjects(req, res) {
 }
 
 export async function createProject(req, res) {
-  const { name, description = '', managerId } = req.body;
+  const { name, description = '', managerId, liveDemoUrl = null, githubUrl = null } = req.body;
   let members = [];
 
   if (managerId) {
@@ -49,13 +48,7 @@ export async function createProject(req, res) {
     members.push({ user: m._id, role: 'manager' });
   }
 
-  // If creator is not admin or manager, ensure owner is recorded
-  const p = await Project.create({
-    name,
-    description,
-    owner: req.user._id,
-    members
-  });
+  const p = await Project.create({ name, description, owner: req.user._id, members, liveDemoUrl, githubUrl });
 
   const populated = await Project.findById(p._id)
     .populate('owner', 'name email role')
@@ -89,11 +82,11 @@ export async function updateProject(req, res) {
   if (req.body.name !== undefined) patch.name = req.body.name;
   if (req.body.description !== undefined) patch.description = req.body.description;
   if (req.body.status !== undefined) patch.status = req.body.status;
+  // Project Links
+  if (req.body.liveDemoUrl !== undefined) patch.liveDemoUrl = req.body.liveDemoUrl || null;
+  if (req.body.githubUrl !== undefined) patch.githubUrl = req.body.githubUrl || null;
 
-  const p = await Project.findByIdAndUpdate(req.params.id, patch, {
-    new: true,
-    runValidators: true
-  })
+  const p = await Project.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true })
     .populate('owner', 'name email role')
     .populate('members.user', 'name email role active');
 
@@ -140,11 +133,7 @@ export async function addMember(req, res) {
   }
 
   const existing = a.project.members.find(m => String(m.user) === String(user._id));
-  if (existing) {
-    existing.role = role;
-  } else {
-    a.project.members.push({ user: user._id, role });
-  }
+  if (existing) { existing.role = role; } else { a.project.members.push({ user: user._id, role }); }
 
   await a.project.save();
 
@@ -164,7 +153,6 @@ export async function removeMember(req, res) {
   a.project.members = a.project.members.filter(m => String(m.user) !== String(targetUserId));
   await a.project.save();
 
-  // If tasks were assigned to this removed member, we can leave them or set assignee null
   res.status(204).end();
 }
 
@@ -185,15 +173,9 @@ export async function projectTasks(req, res) {
     q.assignee = req.user._id;
   }
 
-  if (req.query.status && req.query.status !== 'all') {
-    q.status = req.query.status;
-  }
-  if (req.query.priority && req.query.priority !== 'all') {
-    q.priority = req.query.priority;
-  }
-  if (req.query.assignee && req.query.assignee !== 'all') {
-    q.assignee = req.query.assignee;
-  }
+  if (req.query.status && req.query.status !== 'all') q.status = req.query.status;
+  if (req.query.priority && req.query.priority !== 'all') q.priority = req.query.priority;
+  if (req.query.assignee && req.query.assignee !== 'all') q.assignee = req.query.assignee;
   if (req.query.search) {
     const s = String(req.query.search).trim();
     q.$or = [
@@ -230,9 +212,7 @@ export async function createTask(req, res) {
   if (assignee) {
     const isMember = a.project.members.some(m => String(m.user) === String(assignee));
     if (!isMember) {
-      return res.status(422).json({
-        error: { code: 'VALIDATION_ERROR', message: 'Assignee must be an active project member.' }
-      });
+      return res.status(422).json({ error: { code: 'VALIDATION_ERROR', message: 'Assignee must be an active project member.' } });
     }
   }
 
@@ -251,6 +231,22 @@ export async function createTask(req, res) {
   const populated = await Task.findById(t._id)
     .populate('assignee', 'name email role')
     .populate('createdBy', 'name email');
+
+  // Send assignment notification if task has an assignee
+  if (populated.assignee) {
+    setImmediate(async () => {
+      try {
+        await sendTaskAssignedEmail({
+          task: populated,
+          assignee: populated.assignee,
+          assigner: req.user,
+          projectName: a.project.name
+        });
+      } catch (err) {
+        console.error('[createTask] Email notification failed:', err.message);
+      }
+    });
+  }
 
   res.status(201).json({ task: populated });
 }
