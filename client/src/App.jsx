@@ -21,6 +21,8 @@ import MessagesView from './components/MessagesView.jsx';
 import NotificationsView from './components/NotificationsView.jsx';
 import CalendarView from './components/CalendarView.jsx';
 import MyTasksView from './components/MyTasksView.jsx';
+import AssignTaskModal from './components/AssignTaskModal.jsx';
+import RecentEmailsModal from './components/RecentEmailsModal.jsx';
 import { Globe, Code2 } from 'lucide-react';
 
 export default function App() {
@@ -44,6 +46,14 @@ export default function App() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectForm, setNewProjectForm] = useState({ name: '', description: '', managerId: '', liveDemoUrl: '', githubUrl: '' });
   const [submittingProject, setSubmittingProject] = useState(false);
+  const [showAssignTaskModal, setShowAssignTaskModal] = useState(false);
+  const [assignTaskProjectId, setAssignTaskProjectId] = useState('');
+  const [showRecentEmailsModal, setShowRecentEmailsModal] = useState(false);
+
+  const handleOpenAssignTask = (defaultPid = '') => {
+    setAssignTaskProjectId(defaultPid || selectedProjectId || activeProject || projects[0]?._id || '');
+    setShowAssignTaskModal(true);
+  };
 
   // Task Detail Modal State
   const [taskDetail, setTaskDetail] = useState(null);
@@ -275,18 +285,53 @@ export default function App() {
 
   // Task Operations
   const handleCreateTask = async (taskData) => {
-    const pId = selectedProjectId || activeProject;
+    const pId = taskData.projectId || selectedProjectId || activeProject || projects[0]?._id;
+    if (!pId) {
+      setError('Please create a project first before creating tasks.');
+      return;
+    }
     try {
-      await request(`/projects/${pId}/tasks`, {
+      if (taskData.assignee) {
+        const targetProj = projects.find(p => String(p._id) === String(pId));
+        const isMember = targetProj?.members?.some(m => String(m.user?._id || m.user) === String(taskData.assignee));
+        if (!isMember) {
+          try {
+            await request(`/projects/${pId}/members/${taskData.assignee}`, {
+              method: 'POST',
+              body: { role: 'member' }
+            });
+          } catch (memErr) {
+            console.warn('Auto-membership note:', memErr.message);
+          }
+        }
+      }
+
+      const res = await request(`/projects/${pId}/tasks`, {
         method: 'POST',
-        body: taskData
+        body: {
+          title: taskData.title,
+          description: taskData.description,
+          priority: taskData.priority,
+          assignee: taskData.assignee || null,
+          dueDate: taskData.dueDate || null,
+          status: taskData.status || 'todo'
+        }
       });
-      setNotice('Task created successfully!');
-      const res = await request(`/projects/${pId}/tasks?limit=200`);
-      setTasks(res.data || []);
-      await loadAllTasks(projects, request);
+
+      const assignedUser = assignableUsers.find(u => String(u._id) === String(taskData.assignee));
+      if (assignedUser) {
+        setNotice(`Task assigned to ${assignedUser.name}! ✉️ Automated email notification dispatched to ${assignedUser.email}.`);
+      } else {
+        setNotice('Task created successfully!');
+      }
+
+      const refreshed = await request(`/projects/${pId}/tasks?limit=200`);
+      setTasks(refreshed.data || []);
+      await loadWorkspace();
+      return res.task;
     } catch (err) {
       setError(err.message);
+      throw err;
     }
   };
 
@@ -468,6 +513,8 @@ export default function App() {
           tasksCount={myTasks.filter(t => t.status !== 'done').length}
           onLogout={handleLogout}
           notifCount={notifCount}
+          onOpenAssignTask={handleOpenAssignTask}
+          onOpenRecentEmails={() => setShowRecentEmailsModal(true)}
         />
 
         {/* Main Content View */}
@@ -531,6 +578,8 @@ export default function App() {
               assignableUsers={assignableUsers}
               onOpenProfile={() => setPage('Profile')}
               onOpenNotifications={() => setPage('Notifications')}
+              onOpenAssignTask={handleOpenAssignTask}
+              onOpenRecentEmails={() => setShowRecentEmailsModal(true)}
             />
           ) : page === 'Projects' ? (
             <ProjectsView
@@ -549,6 +598,7 @@ export default function App() {
               onOpenTask={handleOpenTask}
               onChangeStatus={handleChangeStatus}
               onOpenProject={(pid) => setSelectedProjectId(pid)}
+              onOpenAssignTask={handleOpenAssignTask}
             />
           ) : page === 'Kanban Desk' ? (
             <KanbanDeskView
@@ -558,6 +608,7 @@ export default function App() {
               onOpenTask={handleOpenTask}
               onChangeStatus={handleChangeStatus}
               onOpenProject={(pid) => setSelectedProjectId(pid)}
+              onOpenAssignTask={handleOpenAssignTask}
             />
           ) : page === 'Message' ? (
             <MessagesView user={user} />
@@ -596,6 +647,24 @@ export default function App() {
               onReloadTask={handleReloadTask}
             />
           )}
+
+          {/* ASSIGN TASK MODAL */}
+          <AssignTaskModal
+            isOpen={showAssignTaskModal}
+            onClose={() => setShowAssignTaskModal(false)}
+            projects={projects}
+            defaultProjectId={assignTaskProjectId}
+            assignableUsers={assignableUsers}
+            currentUser={user}
+            onSubmit={handleCreateTask}
+          />
+
+          {/* RECENT EMAILS AUDIT MODAL */}
+          <RecentEmailsModal
+            isOpen={showRecentEmailsModal}
+            onClose={() => setShowRecentEmailsModal(false)}
+            token={token}
+          />
 
           {/* CREATE PROJECT MODAL */}
           {showNewProjectModal && (
