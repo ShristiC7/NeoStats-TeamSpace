@@ -1,7 +1,7 @@
 ﻿/**
  * TeamSpace Email Service
  * Uses Nodemailer with configurable SMTP.
- * Fallback to Ethereal Email for instant out-of-the-box local testing with real preview URLs.
+ * Automatic Ethereal email fallback for local testing & live preview URLs.
  */
 
 import nodemailer from 'nodemailer';
@@ -58,29 +58,33 @@ export async function send({ to, subject, text, html }) {
     return;
   }
 
-  let previewUrl = null;
-  try {
-    const mailer = await getTransporter();
-    if (mailer) {
-      const info = await mailer.sendMail({ from: FROM, to, subject, text, html });
-      previewUrl = nodemailer.getTestMessageUrl(info);
-      console.info(`[emailService] Email sent to ${to} (${info.messageId}) ${previewUrl ? 'Preview: ' + previewUrl : ''}`);
-    } else {
-      console.info(`[emailService] Email logged to ${to}: ${subject}`);
-    }
-  } catch (err) {
-    console.error('[emailService] Failed to send email to', to, '-', err.message);
-  }
-
-  recentEmails.unshift({
+  const record = {
     id: Date.now() + Math.random().toString(36).slice(2, 6),
     to,
     subject,
     text,
-    previewUrl,
+    status: 'dispatched',
+    previewUrl: null,
     timestamp: new Date().toISOString()
-  });
+  };
+  recentEmails.unshift(record);
   if (recentEmails.length > 50) recentEmails.pop();
+
+  try {
+    const mailer = await getTransporter();
+    if (mailer) {
+      const info = await mailer.sendMail({ from: FROM, to, subject, text, html });
+      record.previewUrl = nodemailer.getTestMessageUrl(info);
+      record.status = 'delivered';
+      console.info(`[emailService] Email sent to ${to} (${info.messageId}) ${record.previewUrl ? 'Preview: ' + record.previewUrl : ''}`);
+    } else {
+      console.info(`[emailService] Email logged to ${to}: ${subject}`);
+    }
+  } catch (err) {
+    record.status = 'failed';
+    record.error = err.message;
+    console.error('[emailService] Failed to send email to', to, '-', err.message);
+  }
 }
 
 export function getRecentEmails() {
