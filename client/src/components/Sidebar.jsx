@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import {
-  Sparkles,
+  Layers,
   Search,
   Home,
   FolderKanban,
@@ -12,12 +12,11 @@ import {
   Users,
   Settings,
   LogOut,
-  ChevronRight
 } from 'lucide-react';
 
 const initials = s => (s || 'U').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
 
-export default function Sidebar({ page, setPage, user, projectsCount, tasksCount, onLogout }) {
+export default function Sidebar({ page, setPage, user, projectsCount, tasksCount, onLogout, notifCount = 0 }) {
   const mainNav = [
     { id: 'Overview', label: 'Home', icon: Home },
     { id: 'Projects', label: 'Projects', icon: FolderKanban, badge: projectsCount },
@@ -25,12 +24,12 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
     { id: 'Kanban Desk', label: 'Kanban Desk', icon: LayoutGrid },
     { id: 'Message', label: 'Message', icon: MessageSquare },
     { id: 'Calendar', label: 'Calendar', icon: Calendar },
-    { id: 'Notifications', label: 'Notifications', icon: Bell }
+    { id: 'Notifications', label: 'Notifications', icon: Bell, badge: notifCount },
   ];
 
   const othersNav = [
     { id: 'Users', label: 'Team Members', icon: Users, adminOnly: true },
-    { id: 'Profile', label: 'Account Settings', icon: Settings }
+    { id: 'Profile', label: 'Account Settings', icon: Settings },
   ];
 
   return (
@@ -38,10 +37,10 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
       {/* Brand Header */}
       <div className="zendo-brand">
         <div className="zendo-logo-icon">
-          <Sparkles size={20} />
+          <Layers size={20} />
         </div>
         <div style={{ flex: 1 }}>
-          <div className="zendo-logo-text">Zendo</div>
+          <div className="zendo-logo-text">TeamSpace</div>
         </div>
       </div>
 
@@ -73,7 +72,8 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
                     background: isActive ? 'rgba(255,255,255,0.2)' : '#f1f5f9',
                     padding: '1px 6px',
                     borderRadius: 8,
-                    fontWeight: 700
+                    fontWeight: 700,
+                    color: isActive ? '#fff' : '#475569'
                   }}
                 >
                   {item.badge}
@@ -116,7 +116,7 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>{user?.name}</div>
-              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ')}</div>
+              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'capitalize' }}>{user?.role?.replace(/_/g, ' ')}</div>
             </div>
           </div>
           <button
