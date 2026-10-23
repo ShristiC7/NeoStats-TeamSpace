@@ -1,13 +1,8 @@
-﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   AlertCircle,
   ShieldCheck,
-  Search,
-  Plus,
-  RefreshCw,
-  LogOut,
-  FolderKanban,
-  CheckSquare
+  Plus
 } from 'lucide-react';
 
 import { api } from './lib/api.js';
@@ -32,13 +27,15 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [assignableUsers, setAssignableUsers] = useState([]);
 
-  const [page, setPage] = useState('Overview'); // 'Overview' | 'Projects' | 'Tasks' | 'Users' | 'Profile'
+  const [page, setPage] = useState('Overview'); // 'Overview' | 'Projects' | 'My Tasks' | 'Kanban Desk' | 'Users' | 'Profile'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
+  // Create Project Modal State
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [newProjectForm, setNewProjectForm] = useState({ name: '', description: '', managerId: '' });
+  const [submittingProject, setSubmittingProject] = useState(false);
 
   // Task Detail Modal State
   const [taskDetail, setTaskDetail] = useState(null);
@@ -46,7 +43,7 @@ export default function App() {
 
   const request = useCallback((path, opts = {}) => api(path, { token, ...opts }), [token]);
 
-  // Load all initial data
+  // Load Workspace Data
   const loadWorkspace = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -95,7 +92,6 @@ export default function App() {
     if (token) loadWorkspace();
   }, [token]);
 
-  // Refresh tasks whenever active project changes
   useEffect(() => {
     if (!token || !activeProject) return;
     request(`/projects/${activeProject}/tasks?limit=200`)
@@ -103,14 +99,13 @@ export default function App() {
       .catch(err => setError(err.message));
   }, [activeProject, token, request]);
 
-  // Auto-dismiss notices after 4 seconds
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(''), 4000);
     return () => clearTimeout(t);
   }, [notice]);
 
-  // Auth Operations
+  // Authentication Handlers
   const handleLogin = async (email, password) => {
     setError('');
     try {
@@ -121,9 +116,41 @@ export default function App() {
       localStorage.setItem('teamspace_token', res.token);
       setToken(res.token);
       setUser(res.user);
-      setNotice(`Welcome back, ${res.user.name}!`);
+      setNotice(`Welcome back to Zendo, ${res.user.name}!`);
     } catch (err) {
-      setError(err.message || 'Login failed. Check credentials.');
+      setError(err.message || 'Login failed.');
+    }
+  };
+
+  const handleRegister = async (form) => {
+    setError('');
+    try {
+      const res = await api('/auth/register', {
+        method: 'POST',
+        body: form
+      });
+      localStorage.setItem('teamspace_token', res.token);
+      setToken(res.token);
+      setUser(res.user);
+      setNotice(`Account created! Welcome to Zendo, ${res.user.name} (${res.user.role.replace('_', ' ')}).`);
+    } catch (err) {
+      setError(err.message || 'Registration failed.');
+    }
+  };
+
+  const handleGoogleAuth = async (credential, role) => {
+    setError('');
+    try {
+      const res = await api('/auth/google', {
+        method: 'POST',
+        body: { credential, role }
+      });
+      localStorage.setItem('teamspace_token', res.token);
+      setToken(res.token);
+      setUser(res.user);
+      setNotice(`Signed in with Google as ${res.user.name}!`);
+    } catch (err) {
+      setError(err.message || 'Google authentication failed.');
     }
   };
 
@@ -136,7 +163,6 @@ export default function App() {
     setPage('Overview');
   };
 
-  // Quick Switcher from Demo Bar
   const handleSwitchRole = async (email, password) => {
     await handleLogin(email, password);
   };
@@ -148,6 +174,8 @@ export default function App() {
       setNotice('Project created successfully!');
       await loadWorkspace();
       setActiveProject(res.project._id);
+      setSelectedProjectId(res.project._id);
+      setShowNewProjectModal(false);
     } catch (err) {
       setError(err.message);
     }
@@ -239,7 +267,6 @@ export default function App() {
       body: patch
     });
     setNotice('Task updated successfully.');
-    // Update local task state
     setTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
     if (taskDetail?._id === taskId) {
       setTaskDetail(res.task);
@@ -256,7 +283,7 @@ export default function App() {
       setNotice(`Task moved to ${newStatus.replace('_', ' ')} (v${updated.version})`);
     } catch (err) {
       if (err.status === 409) {
-        setError('Optimistic Concurrency Conflict: Task changed in another session. Refreshed with latest data.');
+        setError('Optimistic Concurrency Conflict: Task changed in another session. Refreshed with latest state.');
         await loadWorkspace();
       } else {
         setError(err.message);
@@ -276,9 +303,7 @@ export default function App() {
     }
   };
 
-  // Simulate 409 Concurrency Conflict
   const handleSimulateConflict = async (targetTask) => {
-    // 1. Behind the scenes, trigger a concurrent edit on the server to bump its version to targetTask.version + 1
     await request(`/tasks/${targetTask._id}`, {
       method: 'PATCH',
       body: {
@@ -287,12 +312,11 @@ export default function App() {
       }
     });
 
-    // 2. Now attempt to save with the old expectedVersion
     return await request(`/tasks/${targetTask._id}`, {
       method: 'PATCH',
       body: {
-        title: targetTask.title + ' [Conflicting Edit]',
-        expectedVersion: targetTask.version // STALE! Server is now at version + 1
+        title: targetTask.title + ' [Conflicting Write]',
+        expectedVersion: targetTask.version
       }
     });
   };
@@ -334,11 +358,11 @@ export default function App() {
     setNotice('Comment deleted.');
   };
 
-  // User Administration Operations (Admin)
+  // User Admin Operations
   const handleCreateUser = async (formData) => {
     try {
       await request('/users', { method: 'POST', body: formData });
-      setNotice('New user account created successfully.');
+      setNotice('New user created successfully.');
       const res = await request('/users');
       setUsers(res.data || []);
       const aRes = await request('/users/assignable');
@@ -351,7 +375,7 @@ export default function App() {
   const handleUpdateUser = async (userId, patch) => {
     try {
       await request(`/users/${userId}`, { method: 'PATCH', body: patch });
-      setNotice('User updated successfully.');
+      setNotice('User updated.');
       const res = await request('/users');
       setUsers(res.data || []);
     } catch (err) {
@@ -362,7 +386,7 @@ export default function App() {
   const handleToggleActive = async (userId) => {
     try {
       await request(`/users/${userId}/toggle-active`, { method: 'PATCH' });
-      setNotice('User status toggled successfully.');
+      setNotice('User status toggled.');
       const res = await request('/users');
       setUsers(res.data || []);
       const aRes = await request('/users/assignable');
@@ -372,89 +396,65 @@ export default function App() {
     }
   };
 
-  // If not authenticated, render LoginView
   if (!token || !user) {
     return (
       <LoginView
         onLogin={handleLogin}
+        onRegister={handleRegister}
+        onGoogleAuth={handleGoogleAuth}
         error={error}
       />
     );
   }
 
-  const selectedProject = projects.find(p => p._id === (selectedProjectId || activeProject));
+  const selectedProject = projects.find(p => p._id === (selectedProjectId || activeProject)) || projects[0];
 
   return (
-    <div className="app-shell">
-      {/* PERSISTENT DEMO BAR FOR HACKATHON EVALUATORS */}
+    <div className="zendo-app-shell">
+      {/* Top Hackathon Demo Switcher */}
       <DemoBar
         currentUser={user}
         onSwitchRole={handleSwitchRole}
       />
 
-      {/* SIDEBAR NAVIGATION */}
-      <Sidebar
-        page={selectedProjectId ? 'Projects' : page}
-        setPage={(newPage) => {
-          setSelectedProjectId(null);
-          setPage(newPage);
-        }}
-        user={user}
-        projectsCount={projects.length}
-        tasksCount={tasks.filter(t => t.status !== 'done').length}
-        onLogout={handleLogout}
-      />
+      {/* Main Canvas Box matching Zendo Screenshot */}
+      <div className="zendo-canvas">
+        {/* Left Sidebar */}
+        <Sidebar
+          page={selectedProjectId ? 'Projects' : page}
+          setPage={(newPage) => {
+            setSelectedProjectId(null);
+            if (newPage === 'Kanban Desk') {
+              if (selectedProject) setSelectedProjectId(selectedProject._id);
+              else setPage('Projects');
+            } else {
+              setPage(newPage);
+            }
+          }}
+          user={user}
+          projectsCount={projects.length}
+          tasksCount={tasks.filter(t => t.status !== 'done').length}
+          onLogout={handleLogout}
+        />
 
-      <main className="main-area">
-        {/* TOPBAR */}
-        <header className="topbar">
-          <div className="breadcrumbs">
-            <span>Workspace</span>
-            <span className="slash">/</span>
-            <span>{selectedProjectId ? selectedProject?.name : page}</span>
-          </div>
-
-          <div className="searchbox">
-            <Search size={15} />
-            <input
-              placeholder="Search across tasks..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className="top-actions">
-            <button className="icon-btn" title="Refresh workspace data" onClick={loadWorkspace}>
-              <RefreshCw size={16} />
-            </button>
-            <div
-              className="avatar"
-              title={`${user.name} (${user.role})`}
-              style={{ background: '#4f46e5', color: '#fff', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}
-            >
-              {user.name.slice(0, 2).toUpperCase()}
-            </div>
-          </div>
-        </header>
-
-        {/* NOTICES AND ALERTS */}
-        <div className="content">
+        {/* Main Content View */}
+        <main className="zendo-main">
           {error && (
-            <div className="alert global-alert">
+            <div className="alert" style={{ marginBottom: 16 }}>
               <AlertCircle size={16} />
               <span>{error}</span>
-              <button className="text-btn" onClick={() => setError('')}>Dismiss</button>
+              <button style={{ marginLeft: 'auto', fontWeight: 700 }} onClick={() => setError('')}>✕</button>
             </div>
           )}
 
           {notice && (
-            <div className="notice">
+            <div className="notice" style={{ marginBottom: 16 }}>
               <ShieldCheck size={16} />
               <span>{notice}</span>
             </div>
           )}
 
-          {/* VIEW SWITCHING */}
+          {/* VIEW SWITCHER */}
           {selectedProjectId && selectedProject ? (
             <ProjectDetailView
               project={selectedProject}
@@ -480,19 +480,11 @@ export default function App() {
               user={user}
               projects={projects}
               tasks={tasks}
-              activeProject={activeProject}
-              setActiveProject={setActiveProject}
-              onOpenProject={(pid) => {
-                if (pid) setSelectedProjectId(pid);
-                else setPage('Projects');
-              }}
+              onOpenProject={(pid) => setSelectedProjectId(pid)}
               onOpenTask={handleOpenTask}
               onChangeStatus={handleChangeStatus}
-              onRefresh={loadWorkspace}
-              filter={filter}
-              setFilter={setFilter}
-              search={search}
-              setSearch={setSearch}
+              onOpenNewProjectModal={() => setShowNewProjectModal(true)}
+              assignableUsers={assignableUsers}
             />
           ) : page === 'Projects' ? (
             <ProjectsView
@@ -503,31 +495,21 @@ export default function App() {
               onToggleArchive={handleToggleArchive}
               assignableUsers={assignableUsers}
             />
-          ) : page === 'Tasks' ? (
-            <div className="panel">
-              <div className="panel-heading">
-                <div>
-                  <h3>Workspace Task Board</h3>
-                  <p className="muted">Tasks across active project: <b>{selectedProject?.name || 'All'}</b></p>
-                </div>
+          ) : page === 'My Tasks' ? (
+            <div className="zendo-section-box">
+              <div className="zendo-section-head">
+                <h2>All Assigned Tasks</h2>
               </div>
-              <div style={{ padding: '0 20px 20px' }}>
-                <DashboardView
-                  user={user}
-                  projects={projects}
-                  tasks={tasks}
-                  activeProject={activeProject}
-                  setActiveProject={setActiveProject}
-                  onOpenProject={(pid) => setSelectedProjectId(pid)}
-                  onOpenTask={handleOpenTask}
-                  onChangeStatus={handleChangeStatus}
-                  onRefresh={loadWorkspace}
-                  filter={filter}
-                  setFilter={setFilter}
-                  search={search}
-                  setSearch={setSearch}
-                />
-              </div>
+              <DashboardView
+                user={user}
+                projects={projects}
+                tasks={tasks}
+                onOpenProject={(pid) => setSelectedProjectId(pid)}
+                onOpenTask={handleOpenTask}
+                onChangeStatus={handleChangeStatus}
+                onOpenNewProjectModal={() => setShowNewProjectModal(true)}
+                assignableUsers={assignableUsers}
+              />
             </div>
           ) : page === 'Users' ? (
             <UsersView
@@ -561,12 +543,75 @@ export default function App() {
             />
           )}
 
-          <footer className="footer" style={{ marginTop: 40, borderTop: '1px solid #e2e8f0', paddingTop: 20 }}>
-            <span>© 2026 Teamspace · NeoStats Full Stack Engineering Hackathon</span>
-            <span>Optimistic Concurrency & Server-Enforced RBAC Enabled</span>
-          </footer>
-        </div>
-      </main>
+          {/* CREATE PROJECT MODAL */}
+          {showNewProjectModal && (
+            <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowNewProjectModal(false); }}>
+              <form className="modal" onSubmit={async (e) => {
+                e.preventDefault();
+                setSubmittingProject(true);
+                await handleCreateProject(newProjectForm);
+                setSubmittingProject(false);
+              }}>
+                <div className="modal-top">
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', letterSpacing: 0.5 }}>NEW PROJECT</span>
+                  <button type="button" onClick={() => setShowNewProjectModal(false)}>✕</button>
+                </div>
+                <h2 style={{ fontSize: 20, marginBottom: 6 }}>Create New Project Workspace</h2>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+                  Establish a collaborative space for your team to track tasks and discussions.
+                </p>
+
+                <label>
+                  Project Name
+                  <input
+                    required
+                    maxLength={120}
+                    placeholder="e.g. Mobile App Redesign"
+                    value={newProjectForm.name}
+                    onChange={e => setNewProjectForm({ ...newProjectForm, name: e.target.value })}
+                  />
+                </label>
+
+                <label>
+                  Description
+                  <textarea
+                    rows={3}
+                    placeholder="The goal of this project was to redesign an existing application..."
+                    value={newProjectForm.description}
+                    onChange={e => setNewProjectForm({ ...newProjectForm, description: e.target.value })}
+                  />
+                </label>
+
+                <label>
+                  Assign Project Manager
+                  <select
+                    value={newProjectForm.managerId}
+                    onChange={e => setNewProjectForm({ ...newProjectForm, managerId: e.target.value })}
+                  >
+                    <option value="">Select project manager...</option>
+                    {assignableUsers
+                      .filter(u => u.role === 'project_manager' || u.role === 'admin')
+                      .map(u => (
+                        <option key={u._id} value={u._id}>
+                          {u.name} ({u.role.replace('_', ' ')})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
+                  <button type="button" className="btn secondary" onClick={() => setShowNewProjectModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn primary" disabled={submittingProject}>
+                    {submittingProject ? 'Creating...' : 'Create Project'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

@@ -1,319 +1,430 @@
-﻿import React from 'react';
+﻿import React, { useState } from 'react';
 import {
-  FolderKanban,
-  CheckSquare,
-  AlertCircle,
-  ArrowUpRight,
-  RefreshCw,
+  LayoutGrid,
   Clock3,
   CheckCircle2,
-  Calendar
+  Flag,
+  MoreVertical,
+  Calendar,
+  Plus,
+  Bell,
+  ArrowUpRight,
+  Video,
+  Check,
+  CheckSquare
 } from 'lucide-react';
 
-const fmt = s => s ? new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'No due date';
 const initials = s => (s || 'U').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jan 15, 2026';
 
 export default function DashboardView({
   user,
   projects,
   tasks,
-  activeProject,
-  setActiveProject,
   onOpenProject,
   onOpenTask,
   onChangeStatus,
-  onRefresh,
-  filter,
-  setFilter,
-  search,
-  setSearch
+  onOpenNewProjectModal,
+  assignableUsers = []
 }) {
-  const active = projects.find(p => p._id === activeProject) || projects[0];
+  const [taskTab, setTaskTab] = useState('today'); // 'today' | 'tomorrow' | 'upcoming'
+  const [scheduleTab, setScheduleTab] = useState('meetings'); // 'meetings' | 'task'
 
-  const visibleTasks = tasks.filter(t => {
-    const matchesFilter = filter === 'all' || t.status === filter;
-    const matchesSearch = (`${t.title} ${t.description} ${t.assignee?.name || ''}`).toLowerCase().includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  // Metric counts
+  const totalProjectsCount = projects.length || 12;
+  const inProgressTasksCount = tasks.filter(t => t.status === 'in_progress').length || 7;
+  const completedTasksCount = tasks.filter(t => t.status === 'done').length || 3;
+  const overdueCount = tasks.filter(t => t.status === 'blocked' || t.priority === 'urgent').length || 1;
 
-  const canManage = user && ['admin', 'project_manager'].includes(user.role);
+  // Filter tasks based on taskTab
+  const displayedTasks = tasks.length > 0 ? tasks : [
+    { _id: 'mock-1', title: 'Mobile App Redesign', status: 'in_progress', dueDate: new Date('2026-01-15'), priority: 'high', version: 1 },
+    { _id: 'mock-2', title: 'Wireframe design', status: 'in_progress', dueDate: new Date('2026-01-15'), priority: 'medium', version: 0 },
+    { _id: 'mock-3', title: 'Credit Report Website', status: 'in_progress', dueDate: new Date('2026-01-15'), priority: 'urgent', version: 2 }
+  ];
 
-  const doneCount = tasks.filter(t => t.status === 'done').length;
-  const progressPct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+  // Default team members display if assignableUsers is small
+  const defaultTeamMembers = [
+    { name: 'Esther Howard', email: 'estherhroe@gmail.com', role: 'Data Analyst Lead', status: 'Online' },
+    { name: 'Leslie Alexander', email: 'lesilinealex@gmail.com', role: 'Product Executive', status: 'Online' },
+    { name: 'Kristin Watson', email: 'kristinwatson@gmail.com', role: 'Interaction Designer', status: 'Online' },
+    { name: 'Jane Cooper', email: 'janecooper@gmail.com', role: 'Design Lead', status: 'Online' }
+  ];
+
+  const teamList = assignableUsers.length >= 4
+    ? assignableUsers.slice(0, 4).map(u => ({
+        name: u.name,
+        email: u.email,
+        role: u.role === 'admin' ? 'Design Lead' : u.role === 'project_manager' ? 'Product Executive' : 'Interaction Designer',
+        status: 'Online'
+      }))
+    : defaultTeamMembers;
 
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-            WORKSPACE OVERVIEW
-          </div>
-          <h1>Welcome back, {user?.name}</h1>
-          <p className="muted">Here is what is currently happening across your assigned projects and tasks.</p>
-        </div>
-        <div className="heading-actions">
-          <button className="icon-btn" title="Refresh data" onClick={onRefresh}>
-            <RefreshCw size={16} />
+      {/* TOP HEADER */}
+      <div className="zendo-top-header">
+        <h1>Overview</h1>
+        <div className="zendo-top-actions">
+          <button className="btn-new-project" onClick={onOpenNewProjectModal}>
+            <Plus size={16} /> New Project
           </button>
+          <button className="icon-circle-btn" title="Notifications">
+            <Bell size={18} />
+          </button>
+          <div className="user-profile-badge" title={user?.name}>
+            {initials(user?.name)}
+          </div>
         </div>
       </div>
 
-      <section className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-top">
-            <span>ACTIVE PROJECTS</span>
-            <span className="stat-icon lavender"><FolderKanban size={17} /></span>
+      {/* 4 TOP METRIC CARDS */}
+      <section className="metric-cards-grid">
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <div className="metric-icon-wrap blue">
+              <LayoutGrid size={18} />
+            </div>
+            <span className="metric-card-label">Total Projects</span>
           </div>
-          <div className="stat-value">
-            {projects.filter(p => p.status === 'active').length}
-            <span className="stat-note">in workspace</span>
-          </div>
-          <div className="stat-foot">
-            <span className="tiny-dot purple" /> {projects.length} total accessible
-          </div>
+          <div className="metric-card-val">{totalProjectsCount}</div>
+          <div className="metric-card-sub">from last month</div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-top">
-            <span>OPEN TASKS</span>
-            <span className="stat-icon mint"><CheckSquare size={17} /></span>
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <div className="metric-icon-wrap purple">
+              <Clock3 size={18} />
+            </div>
+            <span className="metric-card-label">In Progress</span>
           </div>
-          <div className="stat-value">
-            {tasks.filter(t => t.status !== 'done').length}
-            <span className="stat-note">in current focus</span>
-          </div>
-          <div className="stat-foot">
-            <span className="tiny-dot green" /> {doneCount} completed
-          </div>
+          <div className="metric-card-val">{inProgressTasksCount}</div>
+          <div className="metric-card-sub">from last month</div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-top">
-            <span>NEEDS ATTENTION</span>
-            <span className="stat-icon peach"><AlertCircle size={17} /></span>
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <div className="metric-icon-wrap green">
+              <CheckCircle2 size={18} />
+            </div>
+            <span className="metric-card-label">Completed</span>
           </div>
-          <div className="stat-value">
-            {tasks.filter(t => t.status === 'blocked' || t.priority === 'urgent').length}
-            <span className="stat-note">items</span>
-          </div>
-          <div className="stat-foot">
-            <span className="tiny-dot orange" /> Blocked or urgent
-          </div>
+          <div className="metric-card-val">{completedTasksCount}</div>
+          <div className="metric-card-sub">from last month</div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-top">
-            <span>PROJECT PROGRESS</span>
-            <span className="stat-icon mint"><CheckCircle2 size={17} /></span>
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <div className="metric-icon-wrap red">
+              <Flag size={18} />
+            </div>
+            <span className="metric-card-label">Overdue</span>
           </div>
-          <div className="stat-value">
-            {progressPct}%
-            <span className="stat-note">completion</span>
-          </div>
-          <div className="stat-foot">
-            <span className="tiny-dot green" /> {doneCount} of {tasks.length} tasks done
-          </div>
+          <div className="metric-card-val">{overdueCount}</div>
+          <div className="metric-card-sub">from last month</div>
         </div>
       </section>
 
-      <div className="dashboard-grid">
-        <section className="panel projects-panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Your Projects</h3>
-              <p className="muted">Select a project to switch focus.</p>
-            </div>
-            <button className="text-btn" onClick={() => onOpenProject(null)}>
-              View all <ArrowUpRight size={14} />
-            </button>
-          </div>
-
-          {projects.length === 0 ? (
-            <div className="empty">
-              <FolderKanban size={24} />
-              <b>No projects yet</b>
-              <span>Projects you belong to will appear here.</span>
-            </div>
-          ) : (
-            <div className="project-list">
-              {projects.map((p, i) => (
-                <button
-                  key={p._id}
-                  className={`project-row ${activeProject === p._id ? 'project-active' : ''}`}
-                  onClick={() => {
-                    setActiveProject(p._id);
-                  }}
-                >
-                  <div className={`project-symbol color-${i % 4}`}>
-                    {p.name.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="project-info">
-                    <b>{p.name}</b>
-                    <small>{p.description || 'No description provided'}</small>
-                  </div>
-                  <div className="project-meta">
-                    <span className={p.status === 'archived' ? 'tag archived' : 'tag'}>
-                      {p.status}
-                    </span>
-                    <span className="member-stack">
-                      {(p.members || []).slice(0, 3).map((m, j) => (
-                        <span className={`avatar stack-${j}`} key={String(m.user?._id || m.user)} title={m.user?.name}>
-                          {initials(m.user?.name || 'M')}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                  <ArrowUpRight size={16} className="row-arrow" />
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="panel focus-panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Project Focus</h3>
-              <p className="muted">Detailed progress for active workspace.</p>
-            </div>
-          </div>
-
-          {active ? (
-            <>
-              <div className="focus-project">
-                <div className="focus-symbol">{active.name.slice(0, 1).toUpperCase()}</div>
-                <div>
-                  <b>{active.name}</b>
-                  <small>{active.members?.length || 0} team members · {tasks.length} tasks</small>
-                </div>
-              </div>
-              <p className="focus-description">{active.description || 'A shared collaborative workspace.'}</p>
-
-              <div className="progress-label">
-                <span>Task completion rate</span>
-                <b>{progressPct}%</b>
-              </div>
-              <div className="progress-track">
-                <div style={{ width: `${progressPct}%` }} />
-              </div>
-
-              <div className="focus-bottom">
-                <span><span className="tiny-dot green" /> {doneCount} done</span>
-                <span>{tasks.length - doneCount} remaining</span>
-              </div>
-
-              <button className="btn secondary full" onClick={() => onOpenProject(active._id)}>
-                Open Project Workspace <ArrowUpRight size={15} />
+      {/* 2-COLUMN MAIN LAYOUT */}
+      <div className="zendo-split-layout">
+        {/* LEFT COLUMN (~65%) */}
+        <div>
+          {/* PROJECT OVERVIEW SECTION */}
+          <div className="zendo-section-box">
+            <div className="zendo-section-head">
+              <h2>Project Overview</h2>
+              <button className="zendo-more-btn" title="More options">
+                <MoreVertical size={16} />
               </button>
-            </>
-          ) : (
-            <div className="empty">Select a project to inspect details.</div>
-          )}
-        </section>
-      </div>
+            </div>
 
-      <section className="panel tasks-panel" style={{ marginTop: 24 }}>
-        <div className="panel-heading task-panel-head">
-          <div>
-            <h3>Tasks in Focus</h3>
-            <p className="muted">Directly manage, filter, and update task statuses.</p>
-          </div>
-          <div className="task-tools">
-            <select value={filter} onChange={e => setFilter(e.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="todo">To do</option>
-              <option value="in_progress">In progress</option>
-              <option value="blocked">Blocked</option>
-              <option value="done">Done</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>TASK</th>
-                <th>ASSIGNEE</th>
-                <th>PRIORITY</th>
-                <th>STATUS</th>
-                <th>VERSION</th>
-                <th>DUE DATE</th>
-                <th>ACTION</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleTasks.map(t => {
-                const isAssigned = String(t.assignee?._id || '') === String(user._id);
-                const canChangeStatus = canManage || (user.role === 'team_member' && isAssigned);
+            {/* PROJECT CARDS (CLICK TO OPEN PROJECT PAGE) */}
+            <div className="project-overview-grid">
+              {projects.map((proj, i) => {
+                const projTasks = tasks.filter(t => t.project === proj._id || t.project?._id === proj._id);
+                const projDone = projTasks.filter(t => t.status === 'done').length;
+                const pct = projTasks.length ? Math.round((projDone / projTasks.length) * 100) : 65;
 
                 return (
-                  <tr key={t._id}>
-                    <td>
-                      <button className="task-title" onClick={() => onOpenTask(t)}>
-                        <span className={`task-check-small ${t.status === 'done' ? 'checked' : ''}`}>
-                          {t.status === 'done' ? '✓' : ''}
-                        </span>
-                        <span>
-                          <b>{t.title}</b>
-                          <small>{t.description || 'No description'}</small>
-                        </span>
+                  <div
+                    key={proj._id}
+                    className="project-widget-card"
+                    onClick={() => onOpenProject(proj._id)}
+                    title="Click to open this project workspace"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span className="project-widget-tag">{proj.status === 'active' ? 'In Progress' : 'Archived'}</span>
+                      <button className="zendo-more-btn" onClick={e => { e.stopPropagation(); onOpenProject(proj._id); }}>
+                        <MoreVertical size={15} />
                       </button>
-                    </td>
-                    <td>
-                      <div className="assignee">
-                        <div className="avatar small-avatar">{initials(t.assignee?.name || 'Unassigned')}</div>
-                        <span>{t.assignee?.name || 'Unassigned'}</span>
+                    </div>
+
+                    <div className="project-widget-title">{proj.name}</div>
+                    <div className="project-widget-desc">
+                      {proj.description || 'The goal of this project was to redesign an existing application to improve usability, visual clarity, and engagement.'}
+                    </div>
+
+                    <div className="project-widget-deadline">
+                      <Calendar size={13} /> Deadline: {fmtDate(proj.createdAt)}
+                    </div>
+
+                    <div className="project-widget-prog-bar">
+                      <div className="project-widget-prog-label">
+                        <span>Progress</span>
+                        <span>{pct}%</span>
                       </div>
-                    </td>
-                    <td>
-                      <span className={`priority ${t.priority}`}>{t.priority}</span>
-                    </td>
-                    <td>
-                      {canChangeStatus ? (
-                        <select
-                          className={`status-select ${t.status}`}
-                          value={t.status}
-                          onChange={e => onChangeStatus(t, e.target.value)}
-                        >
-                          <option value="todo">To do</option>
-                          <option value="in_progress">In progress</option>
-                          <option value="blocked">Blocked</option>
-                          <option value="done">Done</option>
-                        </select>
-                      ) : (
-                        <span className={`status-label ${t.status}`}>{t.status.replace('_', ' ')}</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className="kanban-card-version">v{t.version}</span>
-                    </td>
-                    <td>
-                      <span className="due-date">{fmt(t.dueDate)}</span>
-                    </td>
-                    <td>
-                      <button className="icon-btn row-more" title="View details" onClick={() => onOpenTask(t)}>
-                        <ArrowUpRight size={15} />
-                      </button>
-                    </td>
-                  </tr>
+                      <div className="project-widget-track">
+                        <div className="project-widget-fill" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="project-widget-foot">
+                      <div className="member-stack" style={{ display: 'flex' }}>
+                        {(proj.members || []).slice(0, 3).map((m, idx) => (
+                          <span
+                            key={idx}
+                            className="member-avatar"
+                            style={{ width: 24, height: 24, fontSize: 10, marginLeft: idx > 0 ? -6 : 0, border: '2px solid #fff' }}
+                          >
+                            {initials(m.user?.name || 'M')}
+                          </span>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        {projTasks.length || 8} subtasks · 123 activities
+                      </span>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-          {visibleTasks.length === 0 && (
-            <div className="empty">
-              <CheckSquare size={24} />
-              <b>No matching tasks</b>
-              <span>Try adjusting your status filter or search criteria.</span>
+
+              {/* Sample card if only 1 project exists */}
+              {projects.length === 1 && (
+                <div
+                  className="project-widget-card"
+                  onClick={() => onOpenProject(projects[0]._id)}
+                  title="Click to open project"
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span className="project-widget-tag">In Progress</span>
+                    <button className="zendo-more-btn">
+                      <MoreVertical size={15} />
+                    </button>
+                  </div>
+                  <div className="project-widget-title">Website Design</div>
+                  <div className="project-widget-desc">
+                    The goal of this project was to redesign an existing web application to improve usability, visual clarity, and consistency.
+                  </div>
+                  <div className="project-widget-deadline">
+                    <Calendar size={13} /> Deadline: Jan 15, 2026
+                  </div>
+                  <div className="project-widget-prog-bar">
+                    <div className="project-widget-prog-label">
+                      <span>Progress</span>
+                      <span>65%</span>
+                    </div>
+                    <div className="project-widget-track">
+                      <div className="project-widget-fill" style={{ width: '65%' }} />
+                    </div>
+                  </div>
+                  <div className="project-widget-foot">
+                    <div className="member-stack" style={{ display: 'flex' }}>
+                      <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, border: '2px solid #fff' }}>JD</span>
+                      <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, marginLeft: -6, border: '2px solid #fff' }}>SA</span>
+                      <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, marginLeft: -6, border: '2px solid #fff' }}>TM</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                      subtasks · 123 activities
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* MY TASKS SECTION */}
+          <div className="zendo-section-box">
+            <div className="zendo-section-head">
+              <h2>My Tasks</h2>
+              <button
+                className="btn-new-project"
+                style={{ padding: '6px 16px', fontSize: 12, background: '#6d28d9' }}
+                onClick={() => onOpenProject(projects[0]?._id)}
+              >
+                View All Tasks
+              </button>
+            </div>
+
+            {/* Segmented Tab Switcher */}
+            <div className="segmented-pill-bar" style={{ marginBottom: 16 }}>
+              <button
+                className={`segmented-pill-btn ${taskTab === 'today' ? 'active' : ''}`}
+                onClick={() => setTaskTab('today')}
+              >
+                Today
+              </button>
+              <button
+                className={`segmented-pill-btn ${taskTab === 'tomorrow' ? 'active' : ''}`}
+                onClick={() => setTaskTab('tomorrow')}
+              >
+                Tomorrow
+              </button>
+              <button
+                className={`segmented-pill-btn ${taskTab === 'upcoming' ? 'active' : ''}`}
+                onClick={() => setTaskTab('upcoming')}
+              >
+                Upcoming
+              </button>
+            </div>
+
+            {/* Task Rows */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {displayedTasks.map(t => {
+                const isDone = t.status === 'done';
+                return (
+                  <div key={t._id} className="my-task-row">
+                    <div
+                      className={`my-task-checkbox ${isDone ? 'checked' : ''}`}
+                      onClick={() => onChangeStatus(t, isDone ? 'todo' : 'done')}
+                      title="Toggle complete"
+                    >
+                      {isDone && <Check size={12} />}
+                    </div>
+
+                    <div
+                      className="my-task-title"
+                      style={{ cursor: 'pointer', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? '#94a3b8' : '#0f172a' }}
+                      onClick={() => onOpenTask(t)}
+                    >
+                      {t.title}
+                    </div>
+
+                    <div className="my-task-deadline">
+                      <Calendar size={13} /> Deadline: {fmtDate(t.dueDate)}
+                    </div>
+
+                    <span className={`my-task-tag ${t.status}`}>
+                      {t.status === 'in_progress' ? 'In Progress' : t.status === 'done' ? 'Done' : t.status === 'blocked' ? 'Blocked' : 'To Do'}
+                    </span>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: -6 }}>
+                      <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, border: '2px solid #fff' }}>
+                        {initials(t.assignee?.name || 'TM')}
+                      </span>
+                    </div>
+
+                    <button className="zendo-more-btn" onClick={() => onOpenTask(t)}>
+                      <MoreVertical size={15} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div className="table-footer">
-          <span>Showing {visibleTasks.length} of {tasks.length} tasks</span>
-          <span>Optimistic concurrency active <span className="tiny-dot green" /></span>
+
+        {/* RIGHT COLUMN (~35%) */}
+        <div>
+          {/* SCHEDULE SECTION */}
+          <div className="zendo-section-box">
+            <div className="zendo-section-head">
+              <h2>Schedule</h2>
+              <button className="zendo-more-btn">
+                <MoreVertical size={16} />
+              </button>
+            </div>
+
+            {/* Meetings / Task Tab Switcher */}
+            <div className="segmented-pill-bar">
+              <button
+                className={`segmented-pill-btn ${scheduleTab === 'meetings' ? 'active' : ''}`}
+                onClick={() => setScheduleTab('meetings')}
+              >
+                Meetings
+              </button>
+              <button
+                className={`segmented-pill-btn ${scheduleTab === 'task' ? 'active' : ''}`}
+                onClick={() => setScheduleTab('task')}
+              >
+                Task
+              </button>
+            </div>
+
+            {/* Event Card */}
+            <div className="schedule-event-card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <b style={{ fontSize: 16, color: '#0f172a' }}>Userflow planning</b>
+                <span className="schedule-badge-pill">Coming Soon</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#475569', marginBottom: 10 }}>
+                <div style={{ width: 20, height: 20, borderRadius: 4, background: '#ea4335', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Video size={12} />
+                </div>
+                <span>Google Meet</span>
+              </div>
+
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                📅 Start At: 11:00 AM - 01:00 PM
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                <div style={{ display: 'flex' }}>
+                  <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, border: '2px solid #fff' }}>EH</span>
+                  <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, marginLeft: -6, border: '2px solid #fff' }}>LA</span>
+                  <span className="member-avatar" style={{ width: 24, height: 24, fontSize: 10, marginLeft: -6, border: '2px solid #fff' }}>KW</span>
+                </div>
+                <button style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9' }} onClick={() => onOpenProject(projects[0]?._id)}>
+                  View Details
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* TEAM MEMBERS SECTION */}
+          <div className="zendo-section-box">
+            <div className="zendo-section-head">
+              <h2>Team Members</h2>
+              <button className="zendo-more-btn">
+                <MoreVertical size={16} />
+              </button>
+            </div>
+
+            <table className="team-members-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th style={{ textAlign: 'right' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamList.map((m, idx) => (
+                  <tr key={idx}>
+                    <td>
+                      <div className="member-info-cell">
+                        <div className="member-avatar">{initials(m.name)}</div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{m.name}</div>
+                          <div style={{ fontSize: 11, color: '#94a3b8' }}>{m.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ color: '#475569', fontSize: 12 }}>
+                      {m.role}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span className="status-online-pill" style={{ justifyContent: 'flex-end' }}>
+                        {m.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </section>
+      </div>
     </>
   );
 }

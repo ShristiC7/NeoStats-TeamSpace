@@ -1,65 +1,81 @@
 ﻿import React from 'react';
 import {
-  LayoutDashboard,
+  Sparkles,
+  Search,
+  Home,
   FolderKanban,
   CheckSquare,
+  LayoutGrid,
+  MessageSquare,
+  Calendar,
+  Bell,
   Users,
-  User,
+  Settings,
   LogOut,
-  Sparkles,
-  ChevronRight,
-  ShieldAlert
+  ChevronRight
 } from 'lucide-react';
 
 const initials = s => (s || 'U').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
 
 export default function Sidebar({ page, setPage, user, projectsCount, tasksCount, onLogout }) {
-  const navItems = [
-    { id: 'Overview', label: 'Overview', icon: LayoutDashboard },
+  const mainNav = [
+    { id: 'Overview', label: 'Home', icon: Home },
     { id: 'Projects', label: 'Projects', icon: FolderKanban, badge: projectsCount },
-    { id: 'Tasks', label: 'Task Board', icon: CheckSquare, badge: tasksCount },
-    { id: 'Users', label: 'User Admin', icon: Users, adminOnly: true },
-    { id: 'Profile', label: 'Role & Profile', icon: User }
+    { id: 'My Tasks', label: 'My Tasks', icon: CheckSquare, badge: tasksCount },
+    { id: 'Kanban Desk', label: 'Kanban Desk', icon: LayoutGrid },
+    { id: 'Message', label: 'Message', icon: MessageSquare },
+    { id: 'Calendar', label: 'Calendar', icon: Calendar },
+    { id: 'Notifications', label: 'Notifications', icon: Bell }
+  ];
+
+  const othersNav = [
+    { id: 'Users', label: 'Team Members', icon: Users, adminOnly: true },
+    { id: 'Profile', label: 'Account Settings', icon: Settings }
   ];
 
   return (
-    <aside className="sidebar">
-      <div className="brand-row">
-        <div className="brand-icon" style={{ background: '#6366f1', color: '#fff', padding: '6px 9px', borderRadius: 8, fontWeight: 800 }}>
-          TS
+    <aside className="zendo-sidebar">
+      {/* Brand Header */}
+      <div className="zendo-brand">
+        <div className="zendo-logo-icon">
+          <Sparkles size={20} />
         </div>
-        <div>
-          <b style={{ fontSize: 16 }}>teamspace</b>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>COLLABORATIVE PM</span>
-        </div>
-      </div>
-
-      <div className="workspace-switch">
-        <div className="workspace-badge" style={{ background: '#ede9fe', color: '#6d28d9', fontWeight: 700, padding: '4px 8px', borderRadius: 6 }}>
-          N
-        </div>
-        <div>
-          <b>NeoStats Studio</b>
-          <small>Hackathon Edition</small>
+        <div style={{ flex: 1 }}>
+          <div className="zendo-logo-text">Zendo</div>
         </div>
       </div>
 
-      <div className="nav-label" style={{ marginTop: 20 }}>WORKSPACE</div>
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {navItems.map(item => {
-          if (item.adminOnly && user?.role !== 'admin') return null;
+      {/* Search Input in Sidebar */}
+      <div className="zendo-searchbox">
+        <Search size={15} />
+        <input placeholder="Search..." readOnly onClick={() => setPage('Overview')} />
+      </div>
+
+      {/* Main "Home" Group */}
+      <div className="zendo-nav-group-label">Home</div>
+      <nav className="zendo-nav-list">
+        {mainNav.map(item => {
           const Icon = item.icon;
-          const isSelected = page === item.id;
+          const isActive = page === item.id;
           return (
             <button
               key={item.id}
-              className={`nav-item ${isSelected ? 'selected' : ''}`}
+              className={`zendo-nav-item ${isActive ? 'active' : ''}`}
               onClick={() => setPage(item.id)}
             >
-              <Icon size={18} />
-              <span className="nav-label-text">{item.label}</span>
-              {item.badge !== undefined && (
-                <span className="nav-count" style={{ marginLeft: 'auto' }}>
+              <Icon size={17} />
+              <span>{item.label}</span>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontSize: 11,
+                    background: isActive ? 'rgba(255,255,255,0.2)' : '#f1f5f9',
+                    padding: '1px 6px',
+                    borderRadius: 8,
+                    fontWeight: 700
+                  }}
+                >
                   {item.badge}
                 </span>
               )}
@@ -68,27 +84,46 @@ export default function Sidebar({ page, setPage, user, projectsCount, tasksCount
         })}
       </nav>
 
-      <div style={{ marginTop: 'auto' }}>
-        <div className="help-card" style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#334155' }}>
-            <Sparkles size={14} color="#6366f1" /> Active Role
-          </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, textTransform: 'capitalize' }}>
-            Signed in as <b>{user?.role?.replace('_', ' ')}</b>
-          </div>
-        </div>
+      {/* "Others" Group */}
+      <div className="zendo-nav-group-label" style={{ marginTop: 20 }}>Others</div>
+      <nav className="zendo-nav-list">
+        {othersNav.map(item => {
+          if (item.adminOnly && user?.role !== 'admin') return null;
+          const Icon = item.icon;
+          const isActive = page === item.id;
+          return (
+            <button
+              key={item.id}
+              className={`zendo-nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => setPage(item.id)}
+            >
+              <Icon size={17} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-        <div className="profile-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="avatar" style={{ background: '#4f46e5', color: '#fff', width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+      {/* Profile & Logout in Sidebar Footer */}
+      <div className="zendo-sidebar-footer">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+            onClick={() => setPage('Profile')}
+          >
+            <div className="user-profile-badge" style={{ width: 36, height: 36, fontSize: 13 }}>
               {initials(user?.name)}
             </div>
-            <div className="profile-meta">
-              <b style={{ fontSize: 13, display: 'block' }}>{user?.name}</b>
-              <small style={{ fontSize: 11, color: '#64748b', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ')}</small>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>{user?.name}</div>
+              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ')}</div>
             </div>
           </div>
-          <button className="icon-btn" title="Sign out" onClick={onLogout} style={{ color: '#ef4444' }}>
+          <button
+            title="Sign out"
+            onClick={onLogout}
+            style={{ color: '#94a3b8', padding: 6, borderRadius: 6 }}
+          >
             <LogOut size={16} />
           </button>
         </div>
