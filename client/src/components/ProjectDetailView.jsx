@@ -253,38 +253,61 @@ export default function ProjectDetailView({
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {colTasks.map(t => (
-                        <div
-                          key={t._id}
-                          className="kanban-card"
-                          onClick={() => onOpenTask(t)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span className={`priority ${t.priority}`}>{t.priority}</span>
-                            <span className="kanban-card-version">v{t.version}</span>
-                          </div>
+                      {colTasks.map(t => {
+                        const isAssigned = String(t.assignee?._id || '') === String(user._id);
+                        const canChange = isManager || (user.role === 'team_member' && isAssigned);
 
-                          <div className="kanban-card-title">{t.title}</div>
-                          {t.description && <div className="kanban-card-desc">{t.description}</div>}
-
-                          <div className="kanban-card-foot">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div className="avatar small-avatar" style={{ width: 22, height: 22, fontSize: 10 }}>
-                                {initials(t.assignee?.name || 'U')}
+                        return (
+                          <div
+                            key={t._id}
+                            className="kanban-card"
+                            onClick={() => onOpenTask(t)}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span className={`priority ${t.priority}`}>{t.priority}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span className="kanban-card-version">v{t.version}</span>
+                                {canChange && (
+                                  <select
+                                    style={{ fontSize: 11, padding: '2px 4px', borderRadius: 4, border: '1px solid #cbd5e1', background: '#f8fafc', fontWeight: 600 }}
+                                    value={t.status}
+                                    onClick={e => e.stopPropagation()}
+                                    onChange={e => {
+                                      e.stopPropagation();
+                                      onChangeStatus(t, e.target.value);
+                                    }}
+                                  >
+                                    <option value="todo">To Do</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="blocked">Blocked</option>
+                                    <option value="done">Done</option>
+                                  </select>
+                                )}
                               </div>
-                              <span style={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {t.assignee?.name || 'Unassigned'}
-                              </span>
                             </div>
 
-                            {t.dueDate && (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}>
-                                <Calendar size={11} /> {new Date(t.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                              </span>
-                            )}
+                            <div className="kanban-card-title">{t.title}</div>
+                            {t.description && <div className="kanban-card-desc">{t.description}</div>}
+
+                            <div className="kanban-card-foot">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div className="avatar small-avatar" style={{ width: 22, height: 22, fontSize: 10 }}>
+                                  {initials(t.assignee?.name || 'U')}
+                                </div>
+                                <span style={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {t.assignee?.name || 'Unassigned'}
+                                </span>
+                              </div>
+
+                              {t.dueDate && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}>
+                                  <Calendar size={11} /> {new Date(t.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       {colTasks.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '24px 8px', color: '#94a3b8', fontSize: 12 }}>

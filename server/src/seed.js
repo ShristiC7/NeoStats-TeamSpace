@@ -1,2 +1,91 @@
-import 'dotenv/config';import mongoose from 'mongoose';import bcrypt from 'bcryptjs';import {connectDB} from './config/db.js';import User from './models/User.js';import Project from './models/Project.js';import Task from './models/Task.js';import Comment from './models/Comment.js';
-await connectDB();await Promise.all([Comment.deleteMany({}),Task.deleteMany({}),Project.deleteMany({}),User.deleteMany({email:/@teamspace\.local$/})]);const pass=async p=>bcrypt.hash(p,12);const users=await User.create([{name:'Avery Admin',email:'admin@teamspace.local',passwordHash:await pass('Admin123!'),role:'admin'},{name:'Morgan Manager',email:'manager@teamspace.local',passwordHash:await pass('Manager123!'),role:'project_manager'},{name:'Taylor Member',email:'member@teamspace.local',passwordHash:await pass('Member123!'),role:'team_member'},{name:'Val Viewer',email:'viewer@teamspace.local',passwordHash:await pass('Viewer123!'),role:'viewer'}]);const [admin,manager,member,viewer]=users;const project=await Project.create({name:'Website refresh',description:'Redesign the marketing site and improve the launch workflow.',owner:admin._id,members:[{user:manager._id,role:'manager'},{user:member._id,role:'member'},{user:viewer._id,role:'viewer'}]});const tasks=await Task.create([{project:project._id,title:'Audit current pages',description:'List pages, content gaps and accessibility issues.',status:'in_progress',priority:'high',assignee:member._id,createdBy:manager._id,dueDate:new Date(Date.now()+86400000*3)},{project:project._id,title:'Create visual direction',description:'Prepare a concise set of layout and typography principles.',status:'todo',priority:'medium',assignee:member._id,createdBy:manager._id},{project:project._id,title:'Review launch checklist',description:'Confirm analytics, metadata and responsive behavior.',status:'blocked',priority:'urgent',assignee:manager._id,createdBy:admin._id}]);await Comment.create({task:tasks[0]._id,project:project._id,author:manager._id,body:'Please include mobile and keyboard-navigation checks.'});console.log('Seed complete. Demo logins: admin@teamspace.local / Admin123!, manager@teamspace.local / Manager123!, member@teamspace.local / Member123!, viewer@teamspace.local / Viewer123!');await mongoose.disconnect();
+﻿import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import { connectDB } from './config/db.js';
+import User from './models/User.js';
+import Project from './models/Project.js';
+import Task from './models/Task.js';
+import Comment from './models/Comment.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+await connectDB();
+
+await Promise.all([
+  Comment.deleteMany({}),
+  Task.deleteMany({}),
+  Project.deleteMany({}),
+  User.deleteMany({ email: /@teamspace\.local$/ })
+]);
+
+const pass = async p => bcrypt.hash(p, 12);
+
+const users = await User.create([
+  { name: 'Avery Admin', email: 'admin@teamspace.local', passwordHash: await pass('Admin123!'), role: 'admin' },
+  { name: 'Morgan Manager', email: 'manager@teamspace.local', passwordHash: await pass('Manager123!'), role: 'project_manager' },
+  { name: 'Taylor Member', email: 'member@teamspace.local', passwordHash: await pass('Member123!'), role: 'team_member' },
+  { name: 'Val Viewer', email: 'viewer@teamspace.local', passwordHash: await pass('Viewer123!'), role: 'viewer' }
+]);
+
+const [admin, manager, member, viewer] = users;
+
+const project = await Project.create({
+  name: 'Website refresh',
+  description: 'Redesign the marketing site and improve the launch workflow.',
+  owner: admin._id,
+  members: [
+    { user: manager._id, role: 'manager' },
+    { user: member._id, role: 'member' },
+    { user: viewer._id, role: 'viewer' }
+  ]
+});
+
+const tasks = await Task.create([
+  {
+    project: project._id,
+    title: 'Audit current pages',
+    description: 'List pages, content gaps and accessibility issues.',
+    status: 'in_progress',
+    priority: 'high',
+    assignee: member._id,
+    createdBy: manager._id,
+    dueDate: new Date(Date.now() + 86400000 * 3),
+    version: 0
+  },
+  {
+    project: project._id,
+    title: 'Create visual direction',
+    description: 'Prepare a concise set of layout and typography principles.',
+    status: 'todo',
+    priority: 'medium',
+    assignee: member._id,
+    createdBy: manager._id,
+    version: 0
+  },
+  {
+    project: project._id,
+    title: 'Review launch checklist',
+    description: 'Confirm analytics, metadata and responsive behavior.',
+    status: 'blocked',
+    priority: 'urgent',
+    assignee: manager._id,
+    createdBy: admin._id,
+    version: 0
+  }
+]);
+
+await Comment.create({
+  task: tasks[0]._id,
+  project: project._id,
+  author: manager._id,
+  body: 'Please include mobile and keyboard-navigation checks.'
+});
+
+console.log('Seed complete in', mongoose.connection.name);
+console.log('Demo logins: admin@teamspace.local / Admin123!, manager@teamspace.local / Manager123!, member@teamspace.local / Member123!, viewer@teamspace.local / Viewer123!');
+
+await mongoose.disconnect();
