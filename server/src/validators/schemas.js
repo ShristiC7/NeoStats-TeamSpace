@@ -5,6 +5,18 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required')
 });
 
+export const registerSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(80, 'Name must not exceed 80 characters'),
+  email: z.string().email('Valid email is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: z.enum(['admin', 'project_manager', 'team_member', 'viewer']).default('team_member')
+});
+
+export const googleAuthSchema = z.object({
+  credential: z.string().min(1, 'Google credential token is required'),
+  role: z.enum(['admin', 'project_manager', 'team_member', 'viewer']).optional().default('team_member')
+});
+
 export const createUserSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(80, 'Name must not exceed 80 characters'),
   email: z.string().email('Valid email is required'),

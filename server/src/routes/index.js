@@ -3,6 +3,8 @@ import { requireAuth, allowRoles } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import {
   loginSchema,
+  registerSchema,
+  googleAuthSchema,
   createUserSchema,
   updateUserSchema,
   createProjectSchema,
@@ -13,7 +15,7 @@ import {
   createCommentSchema
 } from '../validators/schemas.js';
 
-import { login, me } from '../controllers/auth.js';
+import { login, register, googleAuth, me } from '../controllers/auth.js';
 import * as users from '../controllers/users.js';
 import * as projects from '../controllers/projects.js';
 import * as tasks from '../controllers/tasks.js';
@@ -23,8 +25,10 @@ const r = Router();
 // Health Check
 r.get('/health', (req, res) => res.json({ ok: true, service: 'teamspace-api', timestamp: new Date().toISOString() }));
 
-// Auth Routes
+// Auth Routes (Login, Role-based Register, Google OAuth)
 r.post('/auth/login', validate(loginSchema), login);
+r.post('/auth/register', validate(registerSchema), register);
+r.post('/auth/google', validate(googleAuthSchema), googleAuth);
 r.get('/auth/me', requireAuth, me);
 
 // Users Management (Admin) & Assignable Users Lookup
