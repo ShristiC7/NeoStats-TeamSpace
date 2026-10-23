@@ -20,6 +20,7 @@ import KanbanDeskView from './components/KanbanDeskView.jsx';
 import MessagesView from './components/MessagesView.jsx';
 import NotificationsView from './components/NotificationsView.jsx';
 import CalendarView from './components/CalendarView.jsx';
+import MyTasksView from './components/MyTasksView.jsx';
 import { Globe, Code2 } from 'lucide-react';
 
 export default function App() {
@@ -28,14 +29,16 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState([]);          // tasks for selected project
+  const [allTasks, setAllTasks] = useState([]);    // tasks across ALL projects
   const [users, setUsers] = useState([]);
   const [assignableUsers, setAssignableUsers] = useState([]);
 
-  const [page, setPage] = useState('Overview'); // 'Overview' | 'Projects' | 'My Tasks' | 'Kanban Desk' | 'Users' | 'Profile'
+  const [page, setPage] = useState('Overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [notifCount] = useState(3); // demo: 3 unread notifications
 
   // Create Project Modal State
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -47,6 +50,19 @@ export default function App() {
   const [taskComments, setTaskComments] = useState([]);
 
   const request = useCallback((path, opts = {}) => api(path, { token, ...opts }), [token]);
+
+  // Load ALL tasks from all projects
+  const loadAllTasks = useCallback(async (pList, reqFn) => {
+    if (!pList || pList.length === 0) { setAllTasks([]); return; }
+    try {
+      const results = await Promise.all(
+        pList.map(p => reqFn(`/projects/${p._id}/tasks?limit=200`).then(r => r.data || []).catch(() => []))
+      );
+      setAllTasks(results.flat());
+    } catch (e) {
+      console.warn('[loadAllTasks]', e.message);
+    }
+  }, []);
 
   // Load Workspace Data
   const loadWorkspace = useCallback(async () => {
@@ -78,6 +94,9 @@ export default function App() {
         setTasks([]);
       }
 
+      // Load all tasks in background
+      await loadAllTasks(pList, request);
+
       if (meRes.user.role === 'admin') {
         const uRes = await request('/users');
         setUsers(uRes.data || []);
@@ -91,7 +110,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [token, request, activeProject]);
+  }, [token, request, activeProject, loadAllTasks]);
 
   useEffect(() => {
     if (token) loadWorkspace();
@@ -100,7 +119,10 @@ export default function App() {
   useEffect(() => {
     if (!token || !activeProject) return;
     request(`/projects/${activeProject}/tasks?limit=200`)
-      .then(res => setTasks(res.data || []))
+      .then(res => {
+        const taskList = res.data || [];
+        setTasks(taskList);
+      })
       .catch(err => setError(err.message));
   }, [activeProject, token, request]);
 
@@ -165,6 +187,7 @@ export default function App() {
     setUser(null);
     setProjects([]);
     setTasks([]);
+    setAllTasks([]);
     setPage('Overview');
   };
 
@@ -261,6 +284,7 @@ export default function App() {
       setNotice('Task created successfully!');
       const res = await request(`/projects/${pId}/tasks?limit=200`);
       setTasks(res.data || []);
+      await loadAllTasks(projects, request);
     } catch (err) {
       setError(err.message);
     }
@@ -273,6 +297,7 @@ export default function App() {
     });
     setNotice('Task updated successfully.');
     setTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
+    setAllTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
     if (taskDetail?._id === taskId) {
       setTaskDetail(res.task);
     }
@@ -303,6 +328,7 @@ export default function App() {
       setNotice('Task deleted.');
       setTaskDetail(null);
       setTasks(prev => prev.filter(t => t._id !== taskId));
+      setAllTasks(prev => prev.filter(t => t._id !== taskId));
     } catch (err) {
       setError(err.message);
     }
@@ -341,6 +367,7 @@ export default function App() {
       const res = await request(`/tasks/${taskId}`);
       setTaskDetail(res.task);
       setTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
+      setAllTasks(prev => prev.map(t => (t._id === taskId ? res.task : t)));
       const cRes = await request(`/tasks/${taskId}/comments`);
       setTaskComments(cRes.data || []);
     } catch (err) {
@@ -413,6 +440,11 @@ export default function App() {
   }
 
   const selectedProject = projects.find(p => p._id === (selectedProjectId || activeProject)) || projects[0];
+  // Tasks for My Tasks page: filter allTasks by logged-in user
+  const myTasks = allTasks.filter(t => {
+    const assigneeId = t.assignee?._id || t.assignee;
+    return String(assigneeId) === String(user._id);
+  });
 
   return (
     <div className="zendo-app-shell">
@@ -422,7 +454,7 @@ export default function App() {
         onSwitchRole={handleSwitchRole}
       />
 
-      {/* Main Canvas Box matching Zendo Screenshot */}
+      {/* Main Canvas Box */}
       <div className="zendo-canvas">
         {/* Left Sidebar */}
         <Sidebar
@@ -433,39 +465,51 @@ export default function App() {
           }}
           user={user}
           projectsCount={projects.length}
-          tasksCount={tasks.filter(t => t.status !== 'done').length}
+          tasksCount={myTasks.filter(t => t.status !== 'done').length}
           onLogout={handleLogout}
+          notifCount={notifCount}
         />
 
         {/* Main Content View */}
         <main className="zendo-main">
-          {error && (
-            <div className="alert" style={{ marginBottom: 16 }}>
-              <AlertCircle size={16} />
-              <span>{error}</span>
-              <button style={{ marginLeft: 'auto', fontWeight: 700 }} onClick={() => setError('')}>✕</button>
-            </div>
-          )}
 
+          {/* Global Notice Banner */}
           {notice && (
-            <div className="notice" style={{ marginBottom: 16 }}>
+            <div className="notice" style={{ margin: '0 0 16px 0', animation: 'fadeIn 0.3s ease' }}>
               <ShieldCheck size={16} />
               <span>{notice}</span>
             </div>
           )}
 
-          {/* VIEW SWITCHER */}
-          {selectedProjectId && selectedProject ? (
+          {/* Global Error Banner */}
+          {error && (
+            <div className="alert" style={{ margin: '0 0 16px 0', animation: 'fadeIn 0.3s ease' }}>
+              <AlertCircle size={16} />
+              <span>{error}</span>
+              <button onClick={() => setError('')} style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 12, borderRadius: 4, background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>✕ Dismiss</button>
+            </div>
+          )}
+
+          {/* ROUTING */}
+          {selectedProjectId ? (
             <ProjectDetailView
               project={selectedProject}
               tasks={tasks}
               user={user}
-              onBack={() => setSelectedProjectId(null)}
+              onBack={() => {
+                setSelectedProjectId(null);
+                setPage('Projects');
+              }}
               onOpenTask={handleOpenTask}
               onCreateTask={handleCreateTask}
-              onUpdateProject={async (patch) => {
-                await request(`/projects/${selectedProject._id}`, { method: 'PATCH', body: patch });
-                await loadWorkspace();
+              onUpdateProject={async (pid, patch) => {
+                try {
+                  await request(`/projects/${pid}`, { method: 'PATCH', body: patch });
+                  setNotice('Project updated.');
+                  await loadWorkspace();
+                } catch (err) {
+                  setError(err.message);
+                }
               }}
               onToggleArchive={handleToggleArchive}
               onDeleteProject={handleDeleteProject}
@@ -479,12 +523,14 @@ export default function App() {
             <DashboardView
               user={user}
               projects={projects}
-              tasks={tasks}
+              tasks={allTasks.length > 0 ? allTasks : tasks}
               onOpenProject={(pid) => setSelectedProjectId(pid)}
               onOpenTask={handleOpenTask}
               onChangeStatus={handleChangeStatus}
               onOpenNewProjectModal={() => setShowNewProjectModal(true)}
               assignableUsers={assignableUsers}
+              onOpenProfile={() => setPage('Profile')}
+              onOpenNotifications={() => setPage('Notifications')}
             />
           ) : page === 'Projects' ? (
             <ProjectsView
@@ -496,26 +542,19 @@ export default function App() {
               assignableUsers={assignableUsers}
             />
           ) : page === 'My Tasks' ? (
-            <div className="zendo-section-box">
-              <div className="zendo-section-head">
-                <h2>All Assigned Tasks</h2>
-              </div>
-              <DashboardView
-                user={user}
-                projects={projects}
-                tasks={tasks}
-                onOpenProject={(pid) => setSelectedProjectId(pid)}
-                onOpenTask={handleOpenTask}
-                onChangeStatus={handleChangeStatus}
-                onOpenNewProjectModal={() => setShowNewProjectModal(true)}
-                assignableUsers={assignableUsers}
-              />
-            </div>
+            <MyTasksView
+              user={user}
+              tasks={allTasks.length > 0 ? allTasks : tasks}
+              projects={projects}
+              onOpenTask={handleOpenTask}
+              onChangeStatus={handleChangeStatus}
+              onOpenProject={(pid) => setSelectedProjectId(pid)}
+            />
           ) : page === 'Kanban Desk' ? (
             <KanbanDeskView
               user={user}
               projects={projects}
-              tasks={tasks}
+              tasks={allTasks.length > 0 ? allTasks : tasks}
               onOpenTask={handleOpenTask}
               onChangeStatus={handleChangeStatus}
               onOpenProject={(pid) => setSelectedProjectId(pid)}
@@ -523,7 +562,7 @@ export default function App() {
           ) : page === 'Message' ? (
             <MessagesView user={user} />
           ) : page === 'Calendar' ? (
-            <CalendarView user={user} tasks={tasks} />
+            <CalendarView user={user} tasks={allTasks.length > 0 ? allTasks : tasks} projects={projects} />
           ) : page === 'Notifications' ? (
             <NotificationsView user={user} />
           ) : page === 'Users' ? (
@@ -541,7 +580,7 @@ export default function App() {
             />
           ) : null}
 
-          {/* TASK DETAIL DRAWER & CONFLICT RESOLUTION MODAL */}
+          {/* TASK DETAIL DRAWER */}
           {taskDetail && (
             <TaskDetailModal
               task={taskDetail}
