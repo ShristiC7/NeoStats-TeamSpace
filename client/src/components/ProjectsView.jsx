@@ -1,14 +1,7 @@
 ﻿import React, { useState } from 'react';
 import {
-  FolderKanban,
-  Plus,
-  Search,
-  ArrowUpRight,
-  Archive,
-  RotateCcw,
-  Users,
-  CheckCircle2,
-  Lock
+  FolderKanban, Plus, Search, ArrowUpRight, Archive, RotateCcw,
+  Users, CheckCircle2, Lock, Globe, Code2, ExternalLink
 } from 'lucide-react';
 
 const initials = s => (s || 'U').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
@@ -27,6 +20,8 @@ export default function ProjectsView({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [managerId, setManagerId] = useState('');
+  const [liveDemoUrl, setLiveDemoUrl] = useState('');
+  const [githubUrl, setGithubUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const canCreate = user?.role === 'admin';
@@ -40,12 +35,20 @@ export default function ProjectsView({
   const handleCreate = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    await onCreateProject({ name, description, managerId: managerId || null });
+    await onCreateProject({
+      name,
+      description,
+      managerId: managerId || null,
+      liveDemoUrl: liveDemoUrl.trim() || undefined,
+      githubUrl: githubUrl.trim() || undefined
+    });
     setSubmitting(false);
     setShowCreateModal(false);
     setName('');
     setDescription('');
     setManagerId('');
+    setLiveDemoUrl('');
+    setGithubUrl('');
   };
 
   return (
@@ -129,6 +132,35 @@ export default function ProjectsView({
                   {p.description || 'No project description provided.'}
                 </div>
 
+                {/* Project Links preview on card */}
+                {(p.liveDemoUrl || p.githubUrl) && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {p.liveDemoUrl && (
+                      <a
+                        href={p.liveDemoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-link-badge demo"
+                        onClick={e => e.stopPropagation()}
+                        style={{ fontSize: 11, padding: '3px 8px' }}
+                      >
+                        <Globe size={12} /> Live Demo
+                      </a>
+                    )}
+                    {p.githubUrl && (
+                      <a
+                        href={p.githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-link-badge github"
+                        onClick={e => e.stopPropagation()}
+                        style={{ fontSize: 11, padding: '3px 8px' }}
+                      >
+                        <Code2 size={12} /> GitHub
+                      </a>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#64748b' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Users size={15} />
@@ -215,7 +247,31 @@ export default function ProjectsView({
               </select>
             </label>
 
-            <div className="modal-actions">
+            <label>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Globe size={13} color="#2563eb" /> Live Demo URL (Optional)
+              </span>
+              <input
+                type="url"
+                placeholder="https://example.com/demo"
+                value={liveDemoUrl}
+                onChange={e => setLiveDemoUrl(e.target.value)}
+              />
+            </label>
+
+            <label>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Code2 size={13} color="#0f172a" /> GitHub Repository URL (Optional)
+              </span>
+              <input
+                type="url"
+                placeholder="https://github.com/organization/repository"
+                value={githubUrl}
+                onChange={e => setGithubUrl(e.target.value)}
+              />
+            </label>
+
+            <div className="modal-actions" style={{ marginTop: 20 }}>
               <button type="button" className="btn secondary" onClick={() => setShowCreateModal(false)}>
                 Cancel
               </button>

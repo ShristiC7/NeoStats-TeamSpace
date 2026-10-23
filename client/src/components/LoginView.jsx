@@ -97,21 +97,21 @@ export default function LoginView({ onLogin, onRegister, onGoogleAuth, error }) 
   };
 
   return (
-    <div className="zendo-auth-container">
-      <div className="zendo-auth-card">
+    <div className="TeamSpace-auth-container">
+      <div className="TeamSpace-auth-card">
         {/* Logo and Brand */}
         <div className="auth-header-logo">
-          <div className="zendo-logo-icon">
+          <div className="TeamSpace-logo-icon">
             <Sparkles size={20} />
           </div>
           <div>
-            <div className="zendo-logo-text">Zendo</div>
+            <div className="TeamSpace-logo-text">TeamSpace</div>
             <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>PROJECT MANAGEMENT</div>
           </div>
         </div>
 
         <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
-          {mode === 'signin' ? 'Welcome back to Zendo' : 'Create your workspace account'}
+          {mode === 'signin' ? 'Welcome back to TeamSpace' : 'Create your workspace account'}
         </h1>
         <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>
           {mode === 'signin'
@@ -179,7 +179,7 @@ export default function LoginView({ onLogin, onRegister, onGoogleAuth, error }) 
             </label>
 
             <button type="submit" className="btn primary full" disabled={submitting} style={{ marginTop: 8, padding: '12px' }}>
-              {submitting ? 'Authenticating...' : 'Sign in to Zendo'} <ArrowRight size={16} />
+              {submitting ? 'Authenticating...' : 'Sign in to TeamSpace'} <ArrowRight size={16} />
             </button>
           </form>
         ) : (
