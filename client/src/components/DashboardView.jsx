@@ -25,7 +25,9 @@ export default function DashboardView({
   onOpenTask,
   onChangeStatus,
   onOpenNewProjectModal,
-  assignableUsers = []
+  assignableUsers = [],
+  onOpenProfile,
+  onOpenNotifications
 }) {
   const [taskTab, setTaskTab] = useState('today'); // 'today' | 'tomorrow' | 'upcoming'
   const [scheduleTab, setScheduleTab] = useState('meetings'); // 'meetings' | 'task'
@@ -69,10 +71,10 @@ export default function DashboardView({
           <button className="btn-new-project" onClick={onOpenNewProjectModal}>
             <Plus size={16} /> New Project
           </button>
-          <button className="icon-circle-btn" title="Notifications">
+          <button className="icon-circle-btn" title="Notifications" onClick={onOpenNotifications}>
             <Bell size={18} />
           </button>
-          <div className="user-profile-badge" title={user?.name}>
+          <div className="user-profile-badge" title={`User Profile: ${user?.name || 'User'}`} onClick={onOpenProfile} style={{ cursor: 'pointer' }}>
             {initials(user?.name)}
           </div>
         </div>
