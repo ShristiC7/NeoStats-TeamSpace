@@ -14,14 +14,24 @@ async function getTransporter() {
   if (process.env.NODE_ENV === 'test') return null;
   if (transporter) return transporter;
 
-  if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+  if (process.env.SMTP_USER && (process.env.SMTP_HOST || process.env.SMTP_PASS)) {
     try {
-      transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      });
+      const isGmail = process.env.SMTP_HOST === 'smtp.gmail.com' || process.env.SMTP_USER.endsWith('@gmail.com');
+      const passClean = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+      
+      if (isGmail) {
+        transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user: process.env.SMTP_USER, pass: passClean }
+        });
+      } else {
+        transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT) || 587,
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: { user: process.env.SMTP_USER, pass: passClean }
+        });
+      }
       return transporter;
     } catch (err) {
       console.error('[emailService] Configured SMTP failed:', err.message);
